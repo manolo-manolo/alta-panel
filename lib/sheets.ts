@@ -1,10 +1,10 @@
 import "server-only";
 import {
-  CATEGORIAS,
   type Categoria,
   TIPOS_UNIDAD,
   type TipoUnidad,
 } from "@/lib/config";
+import { mapCategoria } from "@/lib/expense-map";
 
 /**
  * Lectura y validacion de las hojas de Google (publicadas como CSV).
@@ -147,7 +147,6 @@ function esFechaValida(f: string): boolean {
   return !Number.isNaN(d.getTime());
 }
 
-const CATSET = new Set<string>(CATEGORIAS);
 const TIPOSET = new Set<string>(TIPOS_UNIDAD);
 
 export interface CargaCostes {
@@ -190,16 +189,20 @@ export async function cargarCostes(
     const problemas: string[] = [];
     const mes = rec["mes"];
     const unidad = rec["unidad"];
-    const categoria = rec["categoria"].toLowerCase();
+    const mapeo = mapCategoria(rec["categoria"]);
     const importe = parseImporte(rec["importe_eur"]);
+
+    // Comisiones de canal y capex no entran en el P&L operativo: se ignoran
+    // sin marcarlas como error.
+    if (mapeo.excluir) return;
 
     if (!esMesValido(mes)) problemas.push("mes invalido (formato YYYY-MM)");
     if (!unidad) problemas.push("unidad vacia");
     else if (nicknamesConocidos && !nicknamesConocidos.has(unidad)) {
       problemas.push(`unidad "${unidad}" no coincide con ningun listing`);
     }
-    if (!CATSET.has(categoria)) {
-      problemas.push(`categoria invalida "${rec["categoria"]}"`);
+    if (!mapeo.categoria) {
+      problemas.push(`categoria no reconocida "${rec["categoria"]}"`);
     }
     if (importe === null) problemas.push("importe_eur no es un numero");
 
@@ -211,7 +214,7 @@ export async function cargarCostes(
     rows.push({
       mes,
       unidad,
-      categoria: categoria as Categoria,
+      categoria: mapeo.categoria as Categoria,
       concepto: rec["concepto"] || null,
       importe_eur: importe as number,
     });
