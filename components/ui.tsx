@@ -98,6 +98,17 @@ export function StatusDot({ estado }: { estado: Semaforo | null }) {
   );
 }
 
+export function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-surface p-3">
+      <div className="text-xs font-medium uppercase tracking-wide text-faint">
+        {label}
+      </div>
+      <div className="tabular mt-1 text-lg font-semibold text-ink">{value}</div>
+    </div>
+  );
+}
+
 const CHIP: Record<Semaforo, string> = {
   verde: "bg-ok-soft text-ok",
   ambar: "bg-warn-soft text-warn",

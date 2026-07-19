@@ -2,9 +2,9 @@ import { requireSesion } from "@/lib/session";
 import TopBar from "@/components/TopBar";
 import Banner from "@/components/Banner";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, KpiCard, SectionTitle, Chip } from "@/components/ui";
+import { Card, KpiCard, SectionTitle, Chip, MiniStat } from "@/components/ui";
 import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
-import ChannelDonut from "@/components/charts/ChannelDonut";
+import ChannelTable from "@/components/ChannelTable";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
@@ -32,23 +32,29 @@ import {
   ttm,
   mesPorDefecto,
   mesPrevio,
-  mesAnoAnterior,
+  mesesDePeriodo,
+  desplazarMeses,
+  rangoFechas,
+  etiquetaPeriodo,
+  type Periodo,
   type UnidadMes,
 } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
+const PERIODOS = ["mes", "ytd", "ttm", "ano"];
 
 export default async function UnidadPage({
   params,
   searchParams,
 }: {
   params: Promise<{ listingId: string }>;
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; periodo?: string }>;
 }) {
   await requireSesion();
   const { listingId } = await params;
   const sp = await searchParams;
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesPorDefecto();
+  const periodo: Periodo = (PERIODOS.includes(sp.periodo ?? "") ? sp.periodo : "mes") as Periodo;
 
   let estado;
   try {
@@ -59,15 +65,12 @@ export default async function UnidadPage({
 
   const unidades = await getUnidades();
   const u = unidades.find((x) => x.listingId === listingId);
+  const opts = unidades.map((x) => ({ listingId: x.listingId, nombre: x.displayName }));
 
   if (!u) {
     return (
       <div className="min-h-screen">
-        <TopBar
-          mes={mes}
-          unidades={unidades.map((x) => ({ listingId: x.listingId, nombre: x.displayName }))}
-          ultimaActualizacion={estado.ultimoExito}
-        />
+        <TopBar mes={mes} periodo={periodo} unidades={opts} ultimaActualizacion={estado.ultimoExito} />
         <main className="mx-auto max-w-7xl px-4 py-8">
           <SetupNotice titulo="Unidad no encontrada" />
         </main>
@@ -75,19 +78,23 @@ export default async function UnidadPage({
     );
   }
 
+  const periodMeses = mesesDePeriodo(mes, periodo);
+  const priorMeses = desplazarMeses(periodMeses, -12);
+  const prevMes = mesPrevio(mes);
   const mesesTTM = ttm(mes);
-  const meses = Array.from(new Set([...mesesTTM, mesAnoAnterior(mes)]));
-  const map = await unidadMesMap([u], meses);
+  const todos = Array.from(new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes]));
+  const map = await unidadMesMap([u], todos);
 
-  const de = (m: string): UnidadMes[] => {
-    const x = map.get(`${u.listingId}|${m}`);
-    return x ? [x] : [];
-  };
+  const de = (meses: string[]): UnidadMes[] =>
+    meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x);
 
-  const rMes = sumar(de(mes));
-  const rPrev = sumar(de(mesPrevio(mes)));
-  const rLY = sumar(de(mesAnoAnterior(mes)));
-  const um = map.get(`${u.listingId}|${mes}`)!;
+  const rAct = sumar(de(periodMeses));
+  const rPrev = sumar(de([prevMes]));
+  const rPrior = sumar(de(priorMeses));
+  const esMes = periodo === "mes";
+  const occ = ocupacionDe(rAct);
+  const adr = adrDe(rAct);
+  const revpar = revparDe(rAct);
 
   const nt = noiTTM(u, map, mesesTTM);
   const rendChip = semaforoRentabilidad(u.tipo, nt.yieldPct, nt.margenPct);
@@ -95,43 +102,33 @@ export default async function UnidadPage({
   const serie = seriePnL(map, [u], mesesTTM);
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
+  const { desde, hastaExcl } = rangoFechas(periodMeses);
   const [mix, pac, stats, reservas, costes, revResumen, revNo5] = await Promise.all([
-    mixCanales(mes, u.listingId),
+    mixCanales(periodMeses, u.listingId),
     pacing(u.listingId),
-    statsReservas(mes, u.listingId),
+    statsReservas(periodMeses, u.listingId),
     reservasDelMes(u.listingId, mes),
     costesDetalle(u.nickname, mes),
-    resumenReviews(u.listingId),
-    reviewsNo5(u.listingId),
+    resumenReviews(u.listingId, desde, hastaExcl),
+    reviewsNo5(u.listingId, desde, hastaExcl),
   ]);
+
+  const etiqueta = etiquetaPeriodo(mes, periodo);
 
   return (
     <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        unidades={unidades.map((x) => ({ listingId: x.listingId, nombre: x.displayName }))}
-        unidadId={u.listingId}
-        ultimaActualizacion={estado.ultimoExito}
-      />
+      <TopBar mes={mes} periodo={periodo} unidades={opts} unidadId={u.listingId} ultimaActualizacion={estado.ultimoExito} />
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
         <Banner estado={estado} />
 
-        {/* Cabecera de unidad */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-xl font-semibold text-ink">{u.displayName}</h1>
             <p className="text-sm text-muted">
-              {u.tipo === "propiedad"
-                ? "Propiedad"
-                : u.tipo === "master_lease"
-                  ? "Master lease"
-                  : "Tipo no definido en la hoja"}
-              {u.tipo === "propiedad" && u.costeAdquisicion
-                ? ` · adquisicion ${eur(u.costeAdquisicion)}`
-                : ""}
-              {u.tipo === "master_lease" && u.rentaMensual
-                ? ` · renta ${eur(u.rentaMensual)}/mes`
-                : ""}
+              {u.tipo === "propiedad" ? "Propiedad" : u.tipo === "master_lease" ? "Master lease" : "Tipo no definido"}
+              {u.tipo === "propiedad" && u.costeAdquisicion ? ` · adquisicion ${eur(u.costeAdquisicion)}` : ""}
+              {u.tipo === "master_lease" && u.rentaMensual ? ` · renta ${eur(u.rentaMensual)}/mes` : ""}
+              {" · "}{etiqueta} ({mesLabel(mes)})
             </p>
           </div>
           <div className="text-right">
@@ -151,37 +148,29 @@ export default async function UnidadPage({
           </div>
         </div>
 
-        {/* KPIs */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <KpiCard label="Ocupacion" value={pct(um.ocupacion)}
-            deltaMoM={delta(um.ocupacion, ocupacionDe(rPrev))}
-            deltaYoY={delta(um.ocupacion, ocupacionDe(rLY))} />
-          <KpiCard label="ADR" value={eur(um.adr)}
-            deltaMoM={delta(um.adr, adrDe(rPrev))}
-            deltaYoY={delta(um.adr, adrDe(rLY))} />
-          <KpiCard label="RevPAR" value={eur(um.revpar)}
-            deltaMoM={delta(um.revpar, revparDe(rPrev))}
-            deltaYoY={delta(um.revpar, revparDe(rLY))} />
-          <KpiCard label="Ingresos netos" value={eur(rMes.netos)}
-            deltaMoM={delta(rMes.netos, rPrev.netos)}
-            deltaYoY={delta(rMes.netos, rLY.netos)} />
-          <KpiCard label="NOI" value={eur(rMes.noi)}
-            deltaMoM={delta(rMes.noi, rPrev.noi)}
-            deltaYoY={delta(rMes.noi, rLY.noi)} />
+          <KpiCard label="Ocupacion" value={pct(occ)}
+            deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
+            deltaYoY={delta(occ, ocupacionDe(rPrior))} />
+          <KpiCard label="ADR" value={eur(adr)}
+            deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
+            deltaYoY={delta(adr, adrDe(rPrior))} />
+          <KpiCard label="RevPAR" value={eur(revpar)}
+            deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
+            deltaYoY={delta(revpar, revparDe(rPrior))} />
+          <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
+            deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
+            deltaYoY={delta(rAct.netos, rPrior.netos)} />
+          <KpiCard label="NOI" value={eur(rAct.noi)}
+            deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
+            deltaYoY={delta(rAct.noi, rPrior.noi)} />
         </div>
 
-        {/* Stats de estancia */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <MiniStat label="Noches vendidas" value={num(um.vendidas)} />
-          <MiniStat label="Noches bloqueadas" value={num(um.bloqueadas)} />
-          <MiniStat
-            label="Estancia media"
-            value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} noches` : "-"}
-          />
-          <MiniStat
-            label="Ventana de reserva"
-            value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} dias` : "-"}
-          />
+          <MiniStat label="Noches vendidas" value={num(rAct.vendidas)} />
+          <MiniStat label="Noches bloqueadas" value={num(rAct.bloqueadas)} />
+          <MiniStat label="Estancia media" value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} noches` : "-"} />
+          <MiniStat label="Ventana de reserva" value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} dias` : "-"} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -190,8 +179,8 @@ export default async function UnidadPage({
             <NoiRevenueChart data={serieChart} />
           </Card>
           <Card>
-            <SectionTitle>Mix de canales ({mesLabel(mes)})</SectionTitle>
-            <ChannelDonut data={mix} />
+            <SectionTitle>Mix de canales · {etiqueta}</SectionTitle>
+            <ChannelTable data={mix} />
           </Card>
         </div>
 
@@ -201,7 +190,7 @@ export default async function UnidadPage({
         </Card>
 
         <Card>
-          <SectionTitle>Reviews (historico)</SectionTitle>
+          <SectionTitle>Reviews · {etiqueta}</SectionTitle>
           <ReviewsCard resumen={revResumen} no5={revNo5} />
         </Card>
 
@@ -221,17 +210,6 @@ export default async function UnidadPage({
           </Card>
         </div>
       </main>
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-line bg-surface p-3">
-      <div className="text-xs font-medium uppercase tracking-wide text-faint">
-        {label}
-      </div>
-      <div className="tabular mt-1 text-lg font-semibold text-ink">{value}</div>
     </div>
   );
 }

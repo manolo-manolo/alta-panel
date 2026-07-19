@@ -12,11 +12,13 @@ interface UnidadOpt {
 
 export default function TopBar({
   mes,
+  periodo = "mes",
   unidades,
   unidadId,
   ultimaActualizacion,
 }: {
   mes: string;
+  periodo?: string;
   unidades: UnidadOpt[];
   unidadId?: string;
   ultimaActualizacion: string | null;
@@ -27,19 +29,23 @@ export default function TopBar({
   const [refrescando, setRefrescando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
-  function irA(path: string, nuevoMes: string) {
+  function irA(path: string, nuevoMes: string, nuevoPeriodo: string) {
     startTransition(() => {
-      router.push(`${path}?mes=${nuevoMes}`);
+      router.push(`${path}?mes=${nuevoMes}&periodo=${nuevoPeriodo}`);
     });
   }
 
   function cambiarMes(nuevoMes: string) {
-    irA(pathname, nuevoMes);
+    irA(pathname, nuevoMes, periodo);
+  }
+
+  function cambiarPeriodo(nuevoPeriodo: string) {
+    irA(pathname, mes, nuevoPeriodo);
   }
 
   function cambiarUnidad(valor: string) {
     const path = valor === "" ? "/" : `/unidad/${valor}`;
-    irA(path, mes);
+    irA(path, mes, periodo);
   }
 
   async function refrescar() {
@@ -105,6 +111,18 @@ export default function TopBar({
               ›
             </button>
           </div>
+
+          {/* Selector de periodo */}
+          <select
+            value={periodo}
+            onChange={(e) => cambiarPeriodo(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brand"
+          >
+            <option value="mes">Mes</option>
+            <option value="ytd">YTD</option>
+            <option value="ttm">TTM</option>
+            <option value="ano">Ano</option>
+          </select>
 
           {/* Selector de unidad */}
           <select

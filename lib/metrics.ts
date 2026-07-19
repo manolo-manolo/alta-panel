@@ -413,7 +413,7 @@ export interface MixCanal {
   noches: number;
 }
 export async function mixCanales(
-  mes: string,
+  meses: string[],
   listingId?: string,
 ): Promise<MixCanal[]> {
   const rows = await query<{ channel: string; revenue: number; noches: string }>(
@@ -421,9 +421,9 @@ export async function mixCanales(
             COALESCE(SUM(accommodation_eur),0) AS revenue,
             COUNT(*) AS noches
      FROM reservation_nights
-     WHERE mes = $1 ${listingId ? "AND listing_id = $2" : ""}
+     WHERE mes = ANY($1) ${listingId ? "AND listing_id = $2" : ""}
      GROUP BY channel`,
-    listingId ? [mes, listingId] : [mes],
+    listingId ? [meses, listingId] : [meses],
   );
   const base = new Map<Canal, MixCanal>();
   for (const c of CANALES) base.set(c, { canal: c, revenue: 0, noches: 0 });
@@ -486,7 +486,7 @@ export interface ReservaStats {
   leadTimeMedio: number | null;
 }
 export async function statsReservas(
-  mes: string,
+  meses: string[],
   listingId?: string,
 ): Promise<ReservaStats> {
   const row = await queryOne<{ estancia: number | null; lead: number | null }>(
@@ -494,9 +494,9 @@ export async function statsReservas(
             AVG(EXTRACT(EPOCH FROM (check_in::timestamptz - reservation_created_at)) / 86400)
               FILTER (WHERE reservation_created_at IS NOT NULL) AS lead
      FROM reservations
-     WHERE to_char(check_in, 'YYYY-MM') = $1
+     WHERE to_char(check_in, 'YYYY-MM') = ANY($1)
        ${listingId ? "AND listing_id = $2" : ""}`,
-    listingId ? [mes, listingId] : [mes],
+    listingId ? [meses, listingId] : [meses],
   );
   return {
     estanciaMedia: row?.estancia ?? null,
@@ -590,9 +590,17 @@ export interface ResumenReviews {
   pctConReview: number | null; // reviews / estancias
 }
 
-export async function resumenReviews(listingId?: string): Promise<ResumenReviews> {
-  const cond = listingId ? "WHERE listing_id = $1" : "";
-  const params = listingId ? [listingId] : [];
+export async function resumenReviews(
+  listingId?: string,
+  desde?: string,
+  hastaExcl?: string,
+): Promise<ResumenReviews> {
+  const conds: string[] = [];
+  const params: unknown[] = [];
+  if (listingId) { params.push(listingId); conds.push(`listing_id = $${params.length}`); }
+  if (desde) { params.push(desde); conds.push(`review_date >= $${params.length}`); }
+  if (hastaExcl) { params.push(hastaExcl); conds.push(`review_date < $${params.length}`); }
+  const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
   const r = await queryOne<{
     total: string;
     con_rating: string;
@@ -603,15 +611,25 @@ export async function resumenReviews(listingId?: string): Promise<ResumenReviews
             count(*) FILTER (WHERE rating IS NOT NULL) AS con_rating,
             count(*) FILTER (WHERE rating >= 4.995) AS cinco,
             avg(rating) FILTER (WHERE rating IS NOT NULL) AS medio
-     FROM reviews ${cond}`,
+     FROM reviews ${where}`,
     params,
   );
-  const hoy = hoyMadrid();
+
+  // Estancias completadas en el mismo alcance (para el % con review).
+  const sConds: string[] = [];
+  const sParams: unknown[] = [];
+  if (listingId) { sParams.push(listingId); sConds.push(`listing_id = $${sParams.length}`); }
+  if (desde) { sParams.push(desde); sConds.push(`check_out >= $${sParams.length}`); }
+  if (hastaExcl) {
+    sParams.push(hastaExcl); sConds.push(`check_out < $${sParams.length}`);
+  } else {
+    sParams.push(hoyMadrid()); sConds.push(`check_out <= $${sParams.length}`);
+  }
   const est = await queryOne<{ n: string }>(
-    `SELECT count(*) AS n FROM reservations
-     WHERE check_out <= $1 ${listingId ? "AND listing_id = $2" : ""}`,
-    listingId ? [hoy, listingId] : [hoy],
+    `SELECT count(*) AS n FROM reservations WHERE ${sConds.join(" AND ")}`,
+    sParams,
   );
+
   const total = Number(r?.total ?? 0);
   const estancias = Number(est?.n ?? 0);
   return {
@@ -637,7 +655,16 @@ export interface ReviewNo5 {
 }
 
 /** Todas las reviews que no son de 5 estrellas (rating normalizado < 5). */
-export async function reviewsNo5(listingId?: string): Promise<ReviewNo5[]> {
+export async function reviewsNo5(
+  listingId?: string,
+  desde?: string,
+  hastaExcl?: string,
+): Promise<ReviewNo5[]> {
+  const conds = ["rv.rating IS NOT NULL", "rv.rating < 4.995"];
+  const params: unknown[] = [];
+  if (listingId) { params.push(listingId); conds.push(`rv.listing_id = $${params.length}`); }
+  if (desde) { params.push(desde); conds.push(`rv.review_date >= $${params.length}`); }
+  if (hastaExcl) { params.push(hastaExcl); conds.push(`rv.review_date < $${params.length}`); }
   const rows = await query<{
     id: string;
     channel: string;
@@ -655,10 +682,9 @@ export async function reviewsNo5(listingId?: string): Promise<ReviewNo5[]> {
             rv.listing_id
      FROM reviews rv
      LEFT JOIN reservations r ON r.confirmation_code = rv.reservation_id
-     WHERE rv.rating IS NOT NULL AND rv.rating < 4.995
-       ${listingId ? "AND rv.listing_id = $1" : ""}
+     WHERE ${conds.join(" AND ")}
      ORDER BY rv.review_date DESC NULLS LAST`,
-    listingId ? [listingId] : [],
+    params,
   );
   return rows.map((r) => ({
     id: r.id,
@@ -711,6 +737,42 @@ export function mesPrevio(mes: string): string {
 }
 export function mesAnoAnterior(mes: string): string {
   return sumarMeses(mes, -12);
+}
+
+// --- Periodos ---
+export type Periodo = "mes" | "ytd" | "ttm" | "ano";
+
+export function mesesDePeriodo(mes: string, p: Periodo): string[] {
+  if (p === "ytd") return mesesYTD(mes);
+  if (p === "ttm") return meses12(mes);
+  if (p === "ano") {
+    const y = mes.slice(0, 4);
+    const meses: string[] = [];
+    for (let m = 1; m <= 12; m++) meses.push(`${y}-${String(m).padStart(2, "0")}`);
+    return meses;
+  }
+  return [mes];
+}
+
+export function etiquetaPeriodo(mes: string, p: Periodo): string {
+  if (p === "ytd") return `Acumulado ${mes.slice(0, 4)}`;
+  if (p === "ttm") return "Ultimos 12 meses";
+  if (p === "ano") return `Ano ${mes.slice(0, 4)}`;
+  return "Mes";
+}
+
+/** Rango de fechas [desde, hastaExcl) que cubre un conjunto de meses. */
+export function rangoFechas(meses: string[]): { desde: string; hastaExcl: string } {
+  const ord = [...meses].sort();
+  return {
+    desde: `${ord[0]}-01`,
+    hastaExcl: `${sumarMeses(ord[ord.length - 1], 1)}-01`,
+  };
+}
+
+/** Desplaza un conjunto de meses N meses (para comparaciones YoY). */
+export function desplazarMeses(meses: string[], delta: number): string[] {
+  return meses.map((m) => sumarMeses(m, delta));
 }
 
 // --- NOI TTM y yield/margen por unidad ---

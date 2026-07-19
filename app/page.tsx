@@ -2,9 +2,9 @@ import { requireSesion } from "@/lib/session";
 import TopBar from "@/components/TopBar";
 import Banner from "@/components/Banner";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, KpiCard, SectionTitle } from "@/components/ui";
+import { Card, KpiCard, SectionTitle, MiniStat } from "@/components/ui";
 import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
-import ChannelDonut from "@/components/charts/ChannelDonut";
+import ChannelTable from "@/components/ChannelTable";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
@@ -22,26 +22,36 @@ import {
   mixCanales,
   pacing,
   estadoDatos,
+  statsReservas,
+  resumenReviews,
+  reviewsNo5,
   noiTTM,
   ttm,
   mesPorDefecto,
   mesPrevio,
-  mesAnoAnterior,
-  resumenReviews,
-  reviewsNo5,
+  mesesDePeriodo,
+  desplazarMeses,
+  rangoFechas,
+  etiquetaPeriodo,
+  type Periodo,
   type UnidadMes,
+  type Rollup,
+  type UnidadInfo,
 } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
+const PERIODOS = ["mes", "ytd", "ttm", "ano"];
+
 export default async function PortfolioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; periodo?: string }>;
 }) {
   await requireSesion();
   const sp = await searchParams;
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesPorDefecto();
+  const periodo: Periodo = (PERIODOS.includes(sp.periodo ?? "") ? sp.periodo : "mes") as Periodo;
 
   let estado;
   try {
@@ -55,124 +65,151 @@ export default async function PortfolioPage({
     unidades = await getUnidades();
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("Error de base de datos en portfolio:", e);
     return (
-      <Shell mes={mes} unidades={[]} ultima={estado.ultimoExito}>
-        <SetupNotice
-          titulo="Base de datos no disponible"
-          detalle={`Detalle tecnico: ${msg}`}
-        />
+      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
+        <SetupNotice titulo="Base de datos no disponible" detalle={`Detalle tecnico: ${msg}`} />
       </Shell>
     );
   }
 
   if (unidades.length === 0) {
     return (
-      <Shell mes={mes} unidades={[]} ultima={estado.ultimoExito}>
+      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
         <Banner estado={estado} />
         <SetupNotice titulo="Todavia no hay unidades sincronizadas" />
       </Shell>
     );
   }
 
+  const periodMeses = mesesDePeriodo(mes, periodo);
+  const priorMeses = desplazarMeses(periodMeses, -12);
+  const prevMes = mesPrevio(mes);
   const mesesTTM = ttm(mes);
-  const meses = Array.from(new Set([...mesesTTM, mesAnoAnterior(mes)]));
-  const map = await unidadMesMap(unidades, meses);
+  const todos = Array.from(new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes]));
+  const map = await unidadMesMap(unidades, todos);
 
-  const itemsDe = (m: string): UnidadMes[] =>
-    unidades
-      .map((u) => map.get(`${u.listingId}|${m}`))
-      .filter((x): x is UnidadMes => !!x);
+  const itemsDe = (meses: string[]): UnidadMes[] =>
+    unidades.flatMap((u) =>
+      meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x),
+    );
+  const itemsUnidad = (u: UnidadInfo, meses: string[]): UnidadMes[] =>
+    meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x);
 
-  const rMes = sumar(itemsDe(mes));
-  const rPrev = sumar(itemsDe(mesPrevio(mes)));
-  const rLY = sumar(itemsDe(mesAnoAnterior(mes)));
+  const rAct = sumar(itemsDe(periodMeses));
+  const rPrior = sumar(itemsDe(priorMeses));
+  const rPrev = sumar(itemsDe([prevMes]));
+  const esMes = periodo === "mes";
 
-  const occ = ocupacionDe(rMes);
-  const adr = adrDe(rMes);
-  const revpar = revparDe(rMes);
+  const occ = ocupacionDe(rAct);
+  const adr = adrDe(rAct);
+  const revpar = revparDe(rAct);
 
   const serie = seriePnL(map, unidades, mesesTTM);
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
-  const [mix, pac, revResumen, revNo5] = await Promise.all([
-    mixCanales(mes),
+  const { desde, hastaExcl } = rangoFechas(periodMeses);
+  const [mix, pac, stats, revResumen, revNo5] = await Promise.all([
+    mixCanales(periodMeses),
     pacing(),
-    resumenReviews(),
-    reviewsNo5(),
+    statsReservas(periodMeses),
+    resumenReviews(undefined, desde, hastaExcl),
+    reviewsNo5(undefined, desde, hastaExcl),
   ]);
 
   const unidadesActivas = unidades.filter((u) => u.activo).length;
 
+  // Filas por unidad (agregadas al periodo) + fila total.
   const filas: FilaUnidad[] = unidades.map((u) => {
-    const um = map.get(`${u.listingId}|${mes}`)!;
+    const r = sumar(itemsUnidad(u, periodMeses));
     const nt = noiTTM(u, map, mesesTTM);
-    const rendimiento =
-      u.tipo === "propiedad" ? nt.yieldPct : u.tipo === "master_lease" ? nt.margenPct : null;
+    const rendimiento = u.tipo === "propiedad" ? nt.yieldPct : u.tipo === "master_lease" ? nt.margenPct : null;
+    const umActual = map.get(`${u.listingId}|${mes}`);
     return {
       listingId: u.listingId,
       nickname: u.displayName,
       tipo: u.tipo,
-      ocupacion: um.ocupacion,
-      adr: um.adr,
-      revpar: um.revpar,
-      netos: um.netos,
-      noiMes: um.noi,
+      ocupacion: ocupacionDe(r),
+      adr: adrDe(r),
+      revpar: revparDe(r),
+      netos: r.netos,
+      noiMes: r.noi,
       noiTTM: nt.noiTTM,
       rendimiento,
-      rendimientoTipo:
-        u.tipo === "propiedad" ? "yield" : u.tipo === "master_lease" ? "margen" : null,
+      rendimientoTipo: u.tipo === "propiedad" ? "yield" : u.tipo === "master_lease" ? "margen" : null,
       estado: estadoUnidad({
         tipo: u.tipo,
-        ocupacion: um.ocupacion,
+        ocupacion: ocupacionDe(r),
         mediaOcupacion: occ,
         yieldPct: nt.yieldPct,
         margenPct: nt.margenPct,
       }),
-      costesPendientes: um.costesPendientes,
+      costesPendientes: umActual?.costesPendientes ?? false,
     };
   });
 
+  // Total portfolio (medias ponderadas y sumas).
+  const noiTTMPortfolio = unidades.reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+  const costeOwned = unidades
+    .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
+    .reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
+  const noiTTMOwned = unidades
+    .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
+    .reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+  const total: FilaUnidad = {
+    listingId: "__total__",
+    nickname: "Portfolio",
+    tipo: null,
+    ocupacion: occ,
+    adr,
+    revpar,
+    netos: rAct.netos,
+    noiMes: rAct.noi,
+    noiTTM: noiTTMPortfolio,
+    rendimiento: costeOwned > 0 ? (noiTTMOwned / costeOwned) * 100 : null,
+    rendimientoTipo: "yield",
+    estado: null,
+    costesPendientes: false,
+  };
+
+  const etiqueta = etiquetaPeriodo(mes, periodo);
+
   return (
-    <Shell mes={mes} unidades={unidades} ultima={estado.ultimoExito}>
+    <Shell mes={mes} periodo={periodo} unidades={unidades} ultima={estado.ultimoExito}>
       <Banner estado={estado} />
 
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-lg font-semibold text-ink">
+          Portfolio <span className="text-muted">· {etiqueta} ({mesLabel(mes)})</span>
+        </h1>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <KpiCard
-          label="Ocupacion"
-          value={pct(occ)}
-          deltaMoM={delta(occ, ocupacionDe(rPrev))}
-          deltaYoY={delta(occ, ocupacionDe(rLY))}
-        />
-        <KpiCard
-          label="ADR"
-          value={eur(adr)}
-          deltaMoM={delta(adr, adrDe(rPrev))}
-          deltaYoY={delta(adr, adrDe(rLY))}
-        />
-        <KpiCard
-          label="RevPAR"
-          value={eur(revpar)}
-          deltaMoM={delta(revpar, revparDe(rPrev))}
-          deltaYoY={delta(revpar, revparDe(rLY))}
-        />
-        <KpiCard
-          label="Ingresos netos"
-          value={eur(rMes.netos)}
-          deltaMoM={delta(rMes.netos, rPrev.netos)}
-          deltaYoY={delta(rMes.netos, rLY.netos)}
-        />
-        <KpiCard
-          label="NOI"
-          value={eur(rMes.noi)}
-          deltaMoM={delta(rMes.noi, rPrev.noi)}
-          deltaYoY={delta(rMes.noi, rLY.noi)}
-        />
-        <KpiCard
-          label="Unidades activas"
-          value={num(unidadesActivas)}
-          sub={`${num(rMes.vendidas)} noches vendidas`}
-        />
+        <KpiCard label="Ocupacion" value={pct(occ)}
+          deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
+          deltaYoY={delta(occ, ocupacionDe(rPrior))} />
+        <KpiCard label="ADR" value={eur(adr)}
+          deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
+          deltaYoY={delta(adr, adrDe(rPrior))} />
+        <KpiCard label="RevPAR" value={eur(revpar)}
+          deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
+          deltaYoY={delta(revpar, revparDe(rPrior))} />
+        <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
+          deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
+          deltaYoY={delta(rAct.netos, rPrior.netos)} />
+        <KpiCard label="NOI" value={eur(rAct.noi)}
+          deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
+          deltaYoY={delta(rAct.noi, rPrior.noi)} />
+        <KpiCard label="Unidades activas" value={num(unidadesActivas)}
+          sub={`${num(rAct.vendidas)} noches vendidas`} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <MiniStat label="Ingresos brutos" value={eur(rAct.brutos)} />
+        <MiniStat label="Ingresos limpieza" value={eur(rAct.limpieza)} />
+        <MiniStat label="Noches disponibles" value={num(rAct.disponibles)} />
+        <MiniStat label="Noches bloqueadas" value={num(rAct.bloqueadas)} />
+        <MiniStat label="Estancia media" value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} n` : "-"} />
+        <MiniStat label="Ventana reserva" value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} d` : "-"} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -181,8 +218,8 @@ export default async function PortfolioPage({
           <NoiRevenueChart data={serieChart} />
         </Card>
         <Card>
-          <SectionTitle>Mix de canales ({mesLabel(mes)})</SectionTitle>
-          <ChannelDonut data={mix} />
+          <SectionTitle>Mix de canales · {etiqueta}</SectionTitle>
+          <ChannelTable data={mix} />
         </Card>
       </div>
 
@@ -192,13 +229,13 @@ export default async function PortfolioPage({
       </Card>
 
       <Card>
-        <SectionTitle>Reviews (historico)</SectionTitle>
+        <SectionTitle>Reviews · {etiqueta}</SectionTitle>
         <ReviewsCard resumen={revResumen} no5={revNo5} />
       </Card>
 
       <Card>
-        <SectionTitle>Unidades ({mesLabel(mes)})</SectionTitle>
-        <UnitsTable filas={filas} mes={mes} />
+        <SectionTitle>Unidades · {etiqueta}</SectionTitle>
+        <UnitsTable filas={filas} mes={mes} total={total} />
       </Card>
 
       <Card>
@@ -211,11 +248,13 @@ export default async function PortfolioPage({
 
 function Shell({
   mes,
+  periodo,
   unidades,
   ultima,
   children,
 }: {
   mes: string;
+  periodo: string;
   unidades: { listingId: string; displayName: string }[];
   ultima: string | null;
   children: React.ReactNode;
@@ -224,12 +263,11 @@ function Shell({
     <div className="min-h-screen">
       <TopBar
         mes={mes}
+        periodo={periodo}
         unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
         ultimaActualizacion={ultima}
       />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        {children}
-      </main>
+      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">{children}</main>
     </div>
   );
 }

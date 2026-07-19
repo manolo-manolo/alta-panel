@@ -33,9 +33,11 @@ type Col = {
 export default function UnitsTable({
   filas,
   mes,
+  total,
 }: {
   filas: FilaUnidad[];
   mes: string;
+  total?: FilaUnidad;
 }) {
   const router = useRouter();
   const [sortKey, setSortKey] = useState<string>("noiTTM");
@@ -59,7 +61,7 @@ export default function UnitsTable({
       render: (f) => eur(f.netos), valor: (f) => f.netos,
     },
     {
-      key: "noiMes", label: "NOI mes", align: "right",
+      key: "noiMes", label: "NOI", align: "right",
       render: (f) => eur(f.noiMes), valor: (f) => f.noiMes,
     },
     {
@@ -163,6 +165,18 @@ export default function UnitsTable({
             </tr>
           ))}
         </tbody>
+        {total && (
+          <tfoot>
+            <tr className="border-t-2 border-line font-semibold text-ink">
+              <td className="px-2 py-2 text-left">{total.nickname}</td>
+              {cols.map((c) => (
+                <td key={String(c.key)} className="px-2 py-2 text-right">
+                  {c.render(total)}
+                </td>
+              ))}
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );
