@@ -219,6 +219,21 @@ export async function listGuestyReservations(params: {
   });
 }
 
+export type GuestyReview = Record<string, unknown> & {
+  _id: string;
+  channelId?: string;
+  listingId?: string;
+  externalReservationId?: string;
+  createdAt?: string;
+  createdAtGuesty?: string;
+  rawReview?: Record<string, unknown>;
+};
+
+/** Lista todas las reviews (incluyendo canales personalizados). */
+export async function listGuestyReviews(): Promise<GuestyReview[]> {
+  return paginar<GuestyReview>("/reviews", { includeCustomChannels: "true" });
+}
+
 /** Calendario de un listing entre dos fechas (incluidas). */
 export async function getGuestyCalendar(
   listingId: string,

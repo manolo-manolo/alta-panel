@@ -7,6 +7,7 @@ import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
 import ChannelDonut from "@/components/charts/ChannelDonut";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
+import ReviewsCard from "@/components/ReviewsCard";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, delta } from "@/lib/format";
@@ -26,6 +27,8 @@ import {
   mesPorDefecto,
   mesPrevio,
   mesAnoAnterior,
+  resumenReviews,
+  reviewsNo5,
   type UnidadMes,
 } from "@/lib/metrics";
 
@@ -92,7 +95,12 @@ export default async function PortfolioPage({
   const serie = seriePnL(map, unidades, mesesTTM);
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
-  const [mix, pac] = await Promise.all([mixCanales(mes), pacing()]);
+  const [mix, pac, revResumen, revNo5] = await Promise.all([
+    mixCanales(mes),
+    pacing(),
+    resumenReviews(),
+    reviewsNo5(),
+  ]);
 
   const unidadesActivas = unidades.filter((u) => u.activo).length;
 
@@ -181,6 +189,11 @@ export default async function PortfolioPage({
       <Card>
         <SectionTitle>Pacing (noches y revenue en cartera)</SectionTitle>
         <PacingStrip pacing={pac} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Reviews (historico)</SectionTitle>
+        <ReviewsCard resumen={revResumen} no5={revNo5} />
       </Card>
 
       <Card>

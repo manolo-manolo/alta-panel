@@ -13,6 +13,8 @@ async function main() {
       "listing_availability",
       "cost_rows",
       "units_meta",
+      "unit_settings",
+      "reviews",
     ]) {
       const r = await c.query(`SELECT count(*)::int AS n FROM ${t}`);
       console.log(`${t}: ${r.rows[0].n}`);

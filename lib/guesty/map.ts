@@ -4,6 +4,7 @@ import type {
   GuestyCalendarDay,
   GuestyListing,
   GuestyReservation,
+  GuestyReview,
 } from "@/lib/guesty/client";
 
 function num(v: unknown): number {
@@ -172,6 +173,75 @@ export function dividirNoches(r: ReservationRow): NightRow[] {
     commission_eur: comPorNoche,
     cleaning_eur: i === 0 ? r.cleaning_eur : 0,
   }));
+}
+
+// --- Reviews ---
+export interface ReviewRow {
+  id: string;
+  listing_id: string | null;
+  reservation_id: string | null; // codigo de confirmacion del canal
+  channel: string;
+  rating: number | null; // normalizado a 0-5
+  rating_raw: number | null;
+  rating_scale: number;
+  guest_name: string | null;
+  content: string | null;
+  review_date: string | null;
+  raw: unknown;
+}
+
+/** Canal legible a partir del channelId de Guesty. */
+export function canalReview(channelId: string | null | undefined): string {
+  const c = (channelId ?? "").toLowerCase();
+  if (c.includes("airbnb")) return "airbnb";
+  if (c.includes("booking")) return "booking";
+  if (c.includes("homeaway") || c.includes("vrbo") || c.includes("expedia")) return "vrbo";
+  if (c.includes("custom")) return "directo";
+  return "otros";
+}
+
+/**
+ * Mapea una review de Guesty. Normaliza el rating a escala 0-5
+ * (Airbnb/Vrbo ya vienen en 5, Booking en 10). Solo reviews de huesped.
+ */
+export function mapReview(rev: GuestyReview): ReviewRow | null {
+  const rr = (rev.rawReview ?? {}) as Record<string, unknown>;
+  // Excluir reviews escritas por el host sobre el huesped.
+  const rol = str(rr["reviewer_role"])?.toLowerCase();
+  if (rol === "host") return null;
+
+  const channelId = str(rev.channelId);
+  const canal = canalReview(channelId);
+  const esBooking = (channelId ?? "").toLowerCase().includes("booking");
+  const scale = esBooking ? 10 : 5;
+
+  const rawVal = esBooking
+    ? num(rr["score"] ?? rr["rating"] ?? rr["average"] ?? rr["reviewScore"])
+    : num(rr["overall_rating"] ?? rr["rating"] ?? rr["overallRating"]);
+  const ratingRaw = rawVal > 0 ? rawVal : null;
+  const rating = ratingRaw === null ? null : scale === 10 ? (ratingRaw / 10) * 5 : ratingRaw;
+
+  const content =
+    str(rr["public_review"]) ?? str(rr["publicReview"]) ?? str(rr["comments"]) ?? null;
+  const reviewDate = rev.createdAt
+    ? String(rev.createdAt)
+    : rev.createdAtGuesty
+      ? String(rev.createdAtGuesty)
+      : null;
+
+  return {
+    id: rev._id,
+    listing_id: str(rev.listingId),
+    reservation_id: str(rev.externalReservationId),
+    channel: canal,
+    rating,
+    rating_raw: ratingRaw,
+    rating_scale: scale,
+    guest_name: str(rr["reviewer_name"]),
+    content,
+    review_date: reviewDate,
+    raw: rev,
+  };
 }
 
 export interface AvailabilityRow {

@@ -571,6 +571,99 @@ export async function costesDetalle(
   );
 }
 
+// --- Reviews ---
+export interface ResumenReviews {
+  total: number;
+  conRating: number;
+  cinco: number; // numero de reviews de 5 estrellas
+  ratingMedio: number | null; // escala 0-5
+  estancias: number; // estancias completadas en el alcance
+  pctConReview: number | null; // reviews / estancias
+}
+
+export async function resumenReviews(listingId?: string): Promise<ResumenReviews> {
+  const cond = listingId ? "WHERE listing_id = $1" : "";
+  const params = listingId ? [listingId] : [];
+  const r = await queryOne<{
+    total: string;
+    con_rating: string;
+    cinco: string;
+    medio: number | null;
+  }>(
+    `SELECT count(*) AS total,
+            count(*) FILTER (WHERE rating IS NOT NULL) AS con_rating,
+            count(*) FILTER (WHERE rating >= 4.995) AS cinco,
+            avg(rating) FILTER (WHERE rating IS NOT NULL) AS medio
+     FROM reviews ${cond}`,
+    params,
+  );
+  const hoy = hoyMadrid();
+  const est = await queryOne<{ n: string }>(
+    `SELECT count(*) AS n FROM reservations
+     WHERE check_out <= $1 ${listingId ? "AND listing_id = $2" : ""}`,
+    listingId ? [hoy, listingId] : [hoy],
+  );
+  const total = Number(r?.total ?? 0);
+  const estancias = Number(est?.n ?? 0);
+  return {
+    total,
+    conRating: Number(r?.con_rating ?? 0),
+    cinco: Number(r?.cinco ?? 0),
+    ratingMedio: r?.medio ?? null,
+    estancias,
+    pctConReview: estancias > 0 ? Math.min(1, total / estancias) : null,
+  };
+}
+
+export interface ReviewNo5 {
+  id: string;
+  channel: string;
+  rating: number | null;
+  ratingRaw: number | null;
+  ratingScale: number;
+  content: string | null;
+  fecha: string | null;
+  guest: string | null;
+  listingId: string | null;
+}
+
+/** Todas las reviews que no son de 5 estrellas (rating normalizado < 5). */
+export async function reviewsNo5(listingId?: string): Promise<ReviewNo5[]> {
+  const rows = await query<{
+    id: string;
+    channel: string;
+    rating: number | null;
+    rating_raw: number | null;
+    rating_scale: number;
+    content: string | null;
+    review_date: string | null;
+    guest: string | null;
+    listing_id: string | null;
+  }>(
+    `SELECT rv.id, rv.channel, rv.rating, rv.rating_raw, rv.rating_scale,
+            rv.content, rv.review_date,
+            COALESCE(rv.guest_name, r.guest_name) AS guest,
+            rv.listing_id
+     FROM reviews rv
+     LEFT JOIN reservations r ON r.confirmation_code = rv.reservation_id
+     WHERE rv.rating IS NOT NULL AND rv.rating < 4.995
+       ${listingId ? "AND rv.listing_id = $1" : ""}
+     ORDER BY rv.review_date DESC NULLS LAST`,
+    listingId ? [listingId] : [],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    channel: r.channel,
+    rating: r.rating,
+    ratingRaw: r.rating_raw,
+    ratingScale: r.rating_scale,
+    content: r.content,
+    fecha: r.review_date,
+    guest: r.guest,
+    listingId: r.listing_id,
+  }));
+}
+
 // --- Estado de datos (para el banner) ---
 export interface EstadoDatos {
   ultimoExito: string | null;

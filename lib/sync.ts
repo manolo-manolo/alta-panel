@@ -14,14 +14,17 @@ import {
   getGuestyCalendar,
   listGuestyListings,
   listGuestyReservations,
+  listGuestyReviews,
 } from "@/lib/guesty/client";
 import {
   clasificarDia,
   dividirNoches,
   mapListing,
   mapReservation,
+  mapReview,
   statusIncluido,
   type ReservationRow,
+  type ReviewRow,
 } from "@/lib/guesty/map";
 import { cargarCostes, cargarUnidades, type FilaError } from "@/lib/sheets";
 
@@ -314,6 +317,33 @@ export async function runSync(opts: {
           );
         }
       });
+    }
+
+    // 3b) Reviews (no debe abortar el sync si falla)
+    try {
+      const rawReviews = await listGuestyReviews();
+      const reviews = rawReviews
+        .map(mapReview)
+        .filter((x): x is ReviewRow => x !== null);
+      await withTransaction(async (client) => {
+        await client.query("DELETE FROM reviews");
+        if (reviews.length) {
+          await bulkInsert(
+            client,
+            "reviews",
+            [
+              "id", "listing_id", "reservation_id", "channel", "rating",
+              "rating_raw", "rating_scale", "guest_name", "content", "review_date", "raw",
+            ],
+            reviews.map((r) => [
+              r.id, r.listing_id, r.reservation_id, r.channel, r.rating,
+              r.rating_raw, r.rating_scale, r.guest_name, r.content, r.review_date, j(r.raw),
+            ]),
+          );
+        }
+      });
+    } catch {
+      // ignorar fallos de reviews
     }
 
     // 4) Hojas de Google (costes y unidades). Solo se reemplaza si se leen bien.

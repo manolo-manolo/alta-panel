@@ -9,6 +9,7 @@ import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
+import ReviewsCard from "@/components/ReviewsCard";
 import { semaforoRentabilidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, pctDirecto, delta } from "@/lib/format";
 import {
@@ -26,6 +27,8 @@ import {
   statsReservas,
   reservasDelMes,
   costesDetalle,
+  resumenReviews,
+  reviewsNo5,
   ttm,
   mesPorDefecto,
   mesPrevio,
@@ -92,12 +95,14 @@ export default async function UnidadPage({
   const serie = seriePnL(map, [u], mesesTTM);
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
-  const [mix, pac, stats, reservas, costes] = await Promise.all([
+  const [mix, pac, stats, reservas, costes, revResumen, revNo5] = await Promise.all([
     mixCanales(mes, u.listingId),
     pacing(u.listingId),
     statsReservas(mes, u.listingId),
     reservasDelMes(u.listingId, mes),
     costesDetalle(u.nickname, mes),
+    resumenReviews(u.listingId),
+    reviewsNo5(u.listingId),
   ]);
 
   return (
@@ -193,6 +198,11 @@ export default async function UnidadPage({
         <Card>
           <SectionTitle>Pacing</SectionTitle>
           <PacingStrip pacing={pac} />
+        </Card>
+
+        <Card>
+          <SectionTitle>Reviews (historico)</SectionTitle>
+          <ReviewsCard resumen={revResumen} no5={revNo5} />
         </Card>
 
         <Card>
