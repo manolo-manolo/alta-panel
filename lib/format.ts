@@ -63,11 +63,17 @@ export function mesCorto(mes: string): string {
   return `${MESES[m - 1].slice(0, 3)} ${String(y).slice(2)}`;
 }
 
-/** 'YYYY-MM-DD' -> '15 jul 2026'. */
-export function fecha(f: string | null | undefined): string {
+/** 'YYYY-MM-DD' (o Date/ISO) -> '15 jul 2026'. */
+export function fecha(f: string | Date | null | undefined): string {
   if (!f) return "-";
-  const [y, m, d] = f.slice(0, 10).split("-").map(Number);
-  if (!y || !m || !d) return f;
+  const s =
+    typeof f === "string"
+      ? f
+      : f instanceof Date
+        ? f.toISOString()
+        : String(f);
+  const [y, m, d] = s.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return s;
   return `${d} ${MESES[m - 1].slice(0, 3)} ${y}`;
 }
 
