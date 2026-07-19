@@ -147,6 +147,13 @@ export default function TopBar({
           </button>
 
           <a
+            href="/opex"
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
+          >
+            Opex
+          </a>
+
+          <a
             href="/ajustes"
             className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
           >
