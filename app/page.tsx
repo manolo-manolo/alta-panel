@@ -10,7 +10,6 @@ import { generarInsights } from "@/lib/insights";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
-import CleaningImpact from "@/components/CleaningImpact";
 import OpexDetalle from "@/components/OpexDetalle";
 import PnLUnitPicker from "@/components/PnLUnitPicker";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
@@ -146,24 +145,28 @@ export default async function PortfolioPage({
   const seriePnlSel = unidadPnl ? seriePnL(map, [unidadPnl], mesesTTM) : serie;
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, revResumen, revNo5, cleanCost, opexCats, cleanCostPortfolio] =
+  const [mix, pac, stats, revResumen, revNo5, opexCats, cleanCostPortfolio] =
     await Promise.all([
       mixCanales(periodMeses),
       pacing(),
       statsReservas(periodMeses),
       resumenReviews(undefined, desde, hastaExcl),
       reviewsNo5(undefined, desde, hastaExcl),
-      costesLimpieza(periodMeses, unidadPnl?.nickname),
       costesPorCategoria(periodMeses, unidadPnl?.nickname),
       costesLimpieza(periodMeses),
     ]);
 
   // Margen NOI y desglose de limpieza (sobre el periodo, portfolio o unidad pnl)
-  const rPnl = unidadPnl ? sumar(itemsUnidad(unidadPnl, periodMeses)) : rAct;
   const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
   const margenPrior = rPrior.brutos > 0 ? rPrior.noi / rPrior.brutos : null;
-  const baseLimp = rPnl.alojamiento + rPnl.limpieza;
-  const comisionLimpieza = baseLimp > 0 ? (rPnl.comisiones * rPnl.limpieza) / baseLimp : 0;
+  const rProp = sumar(
+    unidades.filter((u) => u.tipo === "propiedad").flatMap((u) => itemsUnidad(u, periodMeses)),
+  );
+  const rMaster = sumar(
+    unidades.filter((u) => u.tipo === "master_lease").flatMap((u) => itemsUnidad(u, periodMeses)),
+  );
+  const margenProp = rProp.brutos > 0 ? rProp.noi / rProp.brutos : null;
+  const margenMaster = rMaster.brutos > 0 ? rMaster.noi / rMaster.brutos : null;
 
   const unidadesActivas = unidades.filter((u) => u.activo).length;
 
@@ -336,16 +339,23 @@ export default async function PortfolioPage({
         <PnLTable serie={seriePnlSel} />
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
-          <SectionTitle>Limpieza · impacto neto · {etiqueta}</SectionTitle>
-          <CleaningImpact ingresos={rPnl.limpieza} costes={cleanCost} comision={comisionLimpieza} />
-        </Card>
-        <Card>
-          <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
-          <OpexDetalle categorias={opexCats} />
-        </Card>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MiniStat label="Margen NOI total" value={pct(margenNOI)} />
+        <MiniStat label="Margen NOI propiedad" value={pct(margenProp)} />
+        <MiniStat label="Margen NOI master lease" value={pct(margenMaster)} />
+        <MiniStat
+          label="Limpieza neta"
+          value={`${eur(limpiezaNetoPortfolio)}${rAct.limpieza > 0 ? ` (${pct(limpiezaNetoPortfolio / rAct.limpieza)})` : ""}`}
+        />
       </div>
+
+      <Card>
+        <SectionTitle>
+          Desglose de costes · {etiqueta}
+          {unidadPnl ? ` · ${unidadPnl.displayName}` : ""}
+        </SectionTitle>
+        <OpexDetalle categorias={opexCats} />
+      </Card>
     </Shell>
   );
 }

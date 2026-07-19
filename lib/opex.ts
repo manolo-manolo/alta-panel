@@ -262,7 +262,9 @@ async function ibarra2(client: PoolClient): Promise<number> {
       [mes],
     );
     for (const r of src.rows) {
-      nuevas.push({ mes, unidad: "Ibarra 2", categoria: r.categoria, concepto: r.concepto ? `${r.concepto} (perfil Ibarra)` : "Perfil Ibarra", importe: r.importe_eur, estimado: true, origen: "ibarra2" });
+      // Sin sufijo "perfil Ibarra": asi los conceptos consolidan con el resto
+      // de unidades en la vista de portfolio.
+      nuevas.push({ mes, unidad: "Ibarra 2", categoria: r.categoria, concepto: r.concepto ?? r.categoria, importe: r.importe_eur, estimado: true, origen: "ibarra2" });
       filas++;
     }
     nuevas.push({ mes, unidad: "Ibarra 2", categoria: "alquiler", concepto: "Suplemento renta (+80)", importe: 80, estimado: true, origen: "ibarra2" });

@@ -10,7 +10,6 @@ import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
 import ReviewsCard from "@/components/ReviewsCard";
-import CleaningImpact from "@/components/CleaningImpact";
 import OpexDetalle from "@/components/OpexDetalle";
 import { semaforoRentabilidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, pctDirecto, delta } from "@/lib/format";
@@ -213,16 +212,17 @@ export default async function UnidadPage({
           <PnLTable serie={serie} />
         </Card>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
-            <SectionTitle>Limpieza · impacto neto · {etiqueta}</SectionTitle>
-            <CleaningImpact ingresos={rAct.limpieza} costes={cleanCost} comision={comisionLimpieza} />
-          </Card>
-          <Card>
-            <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
-            <OpexDetalle categorias={opexCats} />
-          </Card>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <MiniStat label="Margen NOI" value={pct(margenNOI)} />
+          <MiniStat
+            label="Limpieza neta"
+            value={`${eur(rAct.limpieza - cleanCost - comisionLimpieza)}${rAct.limpieza > 0 ? ` (${pct((rAct.limpieza - cleanCost - comisionLimpieza) / rAct.limpieza)})` : ""}`}
+          />
         </div>
+        <Card>
+          <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
+          <OpexDetalle categorias={opexCats} />
+        </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">
