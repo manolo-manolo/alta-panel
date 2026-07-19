@@ -4,7 +4,13 @@ import {
   TIPOS_UNIDAD,
   type TipoUnidad,
 } from "@/lib/config";
-import { mapCategoria } from "@/lib/expense-map";
+import { mapCategoria, normalizarNombre } from "@/lib/expense-map";
+
+/**
+ * Resolver de unidad: mapa de nombre normalizado (nickname o nombre a mostrar)
+ * al nickname canonico de Guesty. Permite que la hoja use nombres amigables.
+ */
+export type ResolverUnidad = Map<string, string>;
 
 /**
  * Lectura y validacion de las hojas de Google (publicadas como CSV).
@@ -160,7 +166,7 @@ export interface CargaCostes {
  */
 export async function cargarCostes(
   url: string,
-  nicknamesConocidos?: Set<string>,
+  resolver?: ResolverUnidad,
 ): Promise<CargaCostes> {
   const text = await fetchCsv(url);
   const { headers, records } = toObjects(parseCsv(text));
@@ -196,10 +202,13 @@ export async function cargarCostes(
     // sin marcarlas como error.
     if (mapeo.excluir) return;
 
+    let unidadCanonica = unidad;
     if (!esMesValido(mes)) problemas.push("mes invalido (formato YYYY-MM)");
     if (!unidad) problemas.push("unidad vacia");
-    else if (nicknamesConocidos && !nicknamesConocidos.has(unidad)) {
-      problemas.push(`unidad "${unidad}" no coincide con ningun listing`);
+    else if (resolver) {
+      const c = resolver.get(normalizarNombre(unidad));
+      if (!c) problemas.push(`unidad "${unidad}" no coincide con ninguna unidad`);
+      else unidadCanonica = c;
     }
     if (!mapeo.categoria) {
       problemas.push(`categoria no reconocida "${rec["categoria"]}"`);
@@ -213,7 +222,7 @@ export async function cargarCostes(
 
     rows.push({
       mes,
-      unidad,
+      unidad: unidadCanonica,
       categoria: mapeo.categoria as Categoria,
       concepto: rec["concepto"] || null,
       importe_eur: importe as number,
@@ -231,7 +240,7 @@ export interface CargaUnidades {
 /** Valida la hoja Unidades. */
 export async function cargarUnidades(
   url: string,
-  nicknamesConocidos?: Set<string>,
+  resolver?: ResolverUnidad,
 ): Promise<CargaUnidades> {
   const text = await fetchCsv(url);
   const { headers, records } = toObjects(parseCsv(text));
@@ -270,9 +279,12 @@ export async function cargarUnidades(
     const renta = parseImporte(rec["renta_mensual_eur"]);
     const fecha = rec["fecha_inicio"];
 
+    let unidadCanonica = unidad;
     if (!unidad) problemas.push("unidad vacia");
-    else if (nicknamesConocidos && !nicknamesConocidos.has(unidad)) {
-      problemas.push(`unidad "${unidad}" no coincide con ningun listing`);
+    else if (resolver) {
+      const c = resolver.get(normalizarNombre(unidad));
+      if (!c) problemas.push(`unidad "${unidad}" no coincide con ninguna unidad`);
+      else unidadCanonica = c;
     }
     if (!TIPOSET.has(tipo)) {
       problemas.push(`tipo invalido "${rec["tipo"]}" (propiedad | master_lease)`);
@@ -293,7 +305,7 @@ export async function cargarUnidades(
     }
 
     rows.push({
-      unidad,
+      unidad: unidadCanonica,
       tipo: tipo as TipoUnidad,
       coste_total_adquisicion_eur: coste,
       renta_mensual_eur: renta,

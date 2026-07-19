@@ -26,7 +26,13 @@ import {
   type ReservationRow,
   type ReviewRow,
 } from "@/lib/guesty/map";
-import { cargarCostes, cargarUnidades, type FilaError } from "@/lib/sheets";
+import {
+  cargarCostes,
+  cargarUnidades,
+  type FilaError,
+  type ResolverUnidad,
+} from "@/lib/sheets";
+import { normalizarNombre } from "@/lib/expense-map";
 
 const MUTEX_KEY = "sync_lock";
 const MUTEX_STALE_MIN = 15;
@@ -205,9 +211,11 @@ export async function runSync(opts: {
     const rawListings = await listGuestyListings();
     const listings = rawListings.map(mapListing);
     listingsCount = listings.length;
-    const nicknames = new Set(
-      listings.map((l) => l.nickname).filter((n): n is string => !!n),
-    );
+    // Resolver de unidades: nickname y nombre a mostrar -> nickname canonico.
+    const resolver: ResolverUnidad = new Map();
+    for (const l of listings) {
+      if (l.nickname) resolver.set(normalizarNombre(l.nickname), l.nickname);
+    }
 
     await withTransaction(async (client) => {
       for (const l of listings) {
@@ -346,10 +354,26 @@ export async function runSync(opts: {
       // ignorar fallos de reviews
     }
 
+    // Ampliar el resolver con los nombres a mostrar (unit_settings).
+    try {
+      const srows = await query<{ display_name: string | null; nickname: string | null }>(
+        `SELECT s.display_name, l.nickname
+         FROM unit_settings s JOIN listings l ON l.id = s.listing_id
+         WHERE s.display_name IS NOT NULL`,
+      );
+      for (const r of srows) {
+        if (r.display_name && r.nickname) {
+          resolver.set(normalizarNombre(r.display_name), r.nickname);
+        }
+      }
+    } catch {
+      // ignorar
+    }
+
     // 4) Hojas de Google (costes y unidades). Solo se reemplaza si se leen bien.
     if (env.costesCsvUrl) {
       try {
-        const { rows, errores: errCostes } = await cargarCostes(env.costesCsvUrl, nicknames);
+        const { rows, errores: errCostes } = await cargarCostes(env.costesCsvUrl, resolver);
         errores.push(...errCostes);
         costRowsCount = rows.length;
         await withTransaction(async (client) => {
@@ -370,7 +394,7 @@ export async function runSync(opts: {
 
     if (env.unidadesCsvUrl) {
       try {
-        const { rows, errores: errU } = await cargarUnidades(env.unidadesCsvUrl, nicknames);
+        const { rows, errores: errU } = await cargarUnidades(env.unidadesCsvUrl, resolver);
         errores.push(...errU);
         await withTransaction(async (client) => {
           await client.query("DELETE FROM units_meta");

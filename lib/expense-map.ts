@@ -14,6 +14,11 @@ export interface MapeoCategoria {
   excluir: ExclusionTipo | null;
 }
 
+/** Normaliza un nombre para comparar (minusculas, sin acentos, sin espacios extra). */
+export function normalizarNombre(s: string): string {
+  return norm(s);
+}
+
 function norm(s: string): string {
   return s
     .toLowerCase()
