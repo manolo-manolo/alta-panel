@@ -82,26 +82,38 @@ export async function GET() {
     )[0] as Record<string, unknown> | undefined;
     const listingId = listing?._id as string | undefined;
 
-    let calV1: unknown = "sin listing";
-    let calSinV1: unknown = "sin listing";
+    let calendario: unknown = "sin listing";
     if (listingId) {
-      const cal1 = await jget(
-        `${BASE}/availability-pricing-api/calendar/listings/${listingId}?startDate=2026-07-01&endDate=2026-07-07`,
+      const cal = await jget(
+        `${BASE}/availability-pricing/api/calendar/listings/${listingId}?startDate=2026-07-01&endDate=2026-07-07`,
         token,
       );
-      calV1 = { status: cal1.status, shape: resumenLista(cal1.body) };
-      const cal2 = await jget(
-        `https://open-api.guesty.com/availability-pricing-api/calendar/listings/${listingId}?startDate=2026-07-01&endDate=2026-07-07`,
-        token,
-      );
-      calSinV1 = { status: cal2.status, shape: resumenLista(cal2.body) };
+      const body = cal.body as Record<string, unknown>;
+      const dias =
+        (body?.data as { days?: unknown[] })?.days ??
+        (Array.isArray(body?.data) ? (body.data as unknown[]) : null) ??
+        (Array.isArray(body?.results) ? (body.results as unknown[]) : null) ??
+        (Array.isArray(cal.body) ? (cal.body as unknown[]) : null);
+      const primerDia = Array.isArray(dias) ? (dias[0] as Record<string, unknown>) : null;
+      calendario = {
+        status: cal.status,
+        bodyKeys: body ? Object.keys(body) : null,
+        nDias: Array.isArray(dias) ? dias.length : null,
+        primerDia: primerDia
+          ? {
+              keys: Object.keys(primerDia),
+              date: primerDia.date,
+              status: primerDia.status,
+              reservationId: primerDia.reservationId,
+            }
+          : null,
+      };
     }
 
     return NextResponse.json({
-      reservas_sin_filtro: { status: r1.status, resumen: resumenLista(r1.body), muestra },
       reservas_con_filtro: { status: r2.status, resumen: resumenLista(r2.body) },
-      calendario_v1: calV1,
-      calendario_sin_v1: calSinV1,
+      reservas_muestra: muestra,
+      calendario,
     });
   } catch (e) {
     return NextResponse.json(

@@ -213,6 +213,9 @@ export async function listGuestyReservations(params: {
   return paginar<GuestyReservation>("/reservations", {
     filters: JSON.stringify(filters),
     sort: "lastUpdatedAt",
+    // Sin esto, Guesty devuelve una proyeccion minima SIN status/source/money.
+    fields:
+      "_id listingId confirmationCode status source checkIn checkOut nightsCount createdAt lastUpdatedAt money guest",
   });
 }
 
@@ -223,7 +226,7 @@ export async function getGuestyCalendar(
   endDate: string,
 ): Promise<GuestyCalendarDay[]> {
   const env = await guestyFetch<ListEnvelope<GuestyCalendarDay>>(
-    `/availability-pricing-api/calendar/listings/${listingId}`,
+    `/availability-pricing/api/calendar/listings/${listingId}`,
     { searchParams: { startDate, endDate } },
   );
   return extraerResultados<GuestyCalendarDay>(env);
