@@ -1,64 +1,219 @@
-import Image from "next/image";
+import { requireSesion } from "@/lib/session";
+import TopBar from "@/components/TopBar";
+import Banner from "@/components/Banner";
+import SetupNotice from "@/components/SetupNotice";
+import { Card, KpiCard, SectionTitle } from "@/components/ui";
+import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
+import ChannelDonut from "@/components/charts/ChannelDonut";
+import PacingStrip from "@/components/PacingStrip";
+import PnLTable from "@/components/PnLTable";
+import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
+import { estadoUnidad } from "@/lib/status";
+import { eur, num, pct, mesLabel, delta } from "@/lib/format";
+import {
+  getUnidades,
+  unidadMesMap,
+  sumar,
+  ocupacionDe,
+  adrDe,
+  revparDe,
+  seriePnL,
+  mixCanales,
+  pacing,
+  estadoDatos,
+  noiTTM,
+  ttm,
+  mesPorDefecto,
+  mesPrevio,
+  mesAnoAnterior,
+  type UnidadMes,
+} from "@/lib/metrics";
 
-export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+export const dynamic = "force-dynamic";
+
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
+  await requireSesion();
+  const sp = await searchParams;
+  const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesPorDefecto();
+
+  let estado;
+  try {
+    estado = await estadoDatos();
+  } catch {
+    estado = { ultimoExito: null, ultimoLog: null };
+  }
+
+  let unidades;
+  try {
+    unidades = await getUnidades();
+  } catch {
+    return (
+      <Shell mes={mes} unidades={[]} ultima={estado.ultimoExito}>
+        <SetupNotice
+          titulo="Base de datos no disponible"
+          detalle="No se pudo conectar con la base de datos. Revisa la migracion y las variables de entorno."
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+      </Shell>
+    );
+  }
+
+  if (unidades.length === 0) {
+    return (
+      <Shell mes={mes} unidades={[]} ultima={estado.ultimoExito}>
+        <Banner estado={estado} />
+        <SetupNotice titulo="Todavia no hay unidades sincronizadas" />
+      </Shell>
+    );
+  }
+
+  const mesesTTM = ttm(mes);
+  const meses = Array.from(new Set([...mesesTTM, mesAnoAnterior(mes)]));
+  const map = await unidadMesMap(unidades, meses);
+
+  const itemsDe = (m: string): UnidadMes[] =>
+    unidades
+      .map((u) => map.get(`${u.listingId}|${m}`))
+      .filter((x): x is UnidadMes => !!x);
+
+  const rMes = sumar(itemsDe(mes));
+  const rPrev = sumar(itemsDe(mesPrevio(mes)));
+  const rLY = sumar(itemsDe(mesAnoAnterior(mes)));
+
+  const occ = ocupacionDe(rMes);
+  const adr = adrDe(rMes);
+  const revpar = revparDe(rMes);
+
+  const serie = seriePnL(map, unidades, mesesTTM);
+  const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
+
+  const [mix, pac] = await Promise.all([mixCanales(mes), pacing()]);
+
+  const unidadesActivas = unidades.filter((u) => u.activo).length;
+
+  const filas: FilaUnidad[] = unidades.map((u) => {
+    const um = map.get(`${u.listingId}|${mes}`)!;
+    const nt = noiTTM(u, map, mesesTTM);
+    const rendimiento =
+      u.tipo === "propiedad" ? nt.yieldPct : u.tipo === "master_lease" ? nt.margenPct : null;
+    return {
+      listingId: u.listingId,
+      nickname: u.nickname,
+      tipo: u.tipo,
+      ocupacion: um.ocupacion,
+      adr: um.adr,
+      revpar: um.revpar,
+      netos: um.netos,
+      noiMes: um.noi,
+      noiTTM: nt.noiTTM,
+      rendimiento,
+      rendimientoTipo:
+        u.tipo === "propiedad" ? "yield" : u.tipo === "master_lease" ? "margen" : null,
+      estado: estadoUnidad({
+        tipo: u.tipo,
+        ocupacion: um.ocupacion,
+        mediaOcupacion: occ,
+        yieldPct: nt.yieldPct,
+        margenPct: nt.margenPct,
+      }),
+      costesPendientes: um.costesPendientes,
+    };
+  });
+
+  return (
+    <Shell mes={mes} unidades={unidades} ultima={estado.ultimoExito}>
+      <Banner estado={estado} />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <KpiCard
+          label="Ocupacion"
+          value={pct(occ)}
+          deltaMoM={delta(occ, ocupacionDe(rPrev))}
+          deltaYoY={delta(occ, ocupacionDe(rLY))}
+        />
+        <KpiCard
+          label="ADR"
+          value={eur(adr)}
+          deltaMoM={delta(adr, adrDe(rPrev))}
+          deltaYoY={delta(adr, adrDe(rLY))}
+        />
+        <KpiCard
+          label="RevPAR"
+          value={eur(revpar)}
+          deltaMoM={delta(revpar, revparDe(rPrev))}
+          deltaYoY={delta(revpar, revparDe(rLY))}
+        />
+        <KpiCard
+          label="Ingresos netos"
+          value={eur(rMes.netos)}
+          deltaMoM={delta(rMes.netos, rPrev.netos)}
+          deltaYoY={delta(rMes.netos, rLY.netos)}
+        />
+        <KpiCard
+          label="NOI"
+          value={eur(rMes.noi)}
+          deltaMoM={delta(rMes.noi, rPrev.noi)}
+          deltaYoY={delta(rMes.noi, rLY.noi)}
+        />
+        <KpiCard
+          label="Unidades activas"
+          value={num(unidadesActivas)}
+          sub={`${num(rMes.vendidas)} noches vendidas`}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <SectionTitle>Ingresos y NOI (ultimos 12 meses)</SectionTitle>
+          <NoiRevenueChart data={serieChart} />
+        </Card>
+        <Card>
+          <SectionTitle>Mix de canales ({mesLabel(mes)})</SectionTitle>
+          <ChannelDonut data={mix} />
+        </Card>
+      </div>
+
+      <Card>
+        <SectionTitle>Pacing (noches y revenue en cartera)</SectionTitle>
+        <PacingStrip pacing={pac} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Unidades ({mesLabel(mes)})</SectionTitle>
+        <UnitsTable filas={filas} mes={mes} />
+      </Card>
+
+      <Card>
+        <SectionTitle>P&amp;L del portfolio (ultimos 12 meses)</SectionTitle>
+        <PnLTable serie={serie} />
+      </Card>
+    </Shell>
+  );
+}
+
+function Shell({
+  mes,
+  unidades,
+  ultima,
+  children,
+}: {
+  mes: string;
+  unidades: { listingId: string; nickname: string }[];
+  ultima: string | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-screen">
+      <TopBar
+        mes={mes}
+        unidades={unidades.map((u) => ({ listingId: u.listingId, nickname: u.nickname }))}
+        ultimaActualizacion={ultima}
+      />
+      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
+        {children}
       </main>
     </div>
   );
