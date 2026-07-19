@@ -8,6 +8,9 @@ import ChannelTable from "@/components/ChannelTable";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
+import CleaningImpact from "@/components/CleaningImpact";
+import OpexDetalle from "@/components/OpexDetalle";
+import PnLUnitPicker from "@/components/PnLUnitPicker";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, delta } from "@/lib/format";
@@ -25,6 +28,8 @@ import {
   statsReservas,
   resumenReviews,
   reviewsNo5,
+  costesLimpieza,
+  costesPorCategoria,
   noiTTM,
   ttm,
   mesPorDefecto,
@@ -46,12 +51,13 @@ const PERIODOS = ["mes", "ytd", "ttm", "ano"];
 export default async function PortfolioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; periodo?: string }>;
+  searchParams: Promise<{ mes?: string; periodo?: string; pnl?: string }>;
 }) {
   await requireSesion();
   const sp = await searchParams;
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesPorDefecto();
   const periodo: Periodo = (PERIODOS.includes(sp.periodo ?? "") ? sp.periodo : "mes") as Periodo;
+  const pnlSel = sp.pnl ?? "";
 
   let estado;
   try {
@@ -107,14 +113,27 @@ export default async function PortfolioPage({
   const serie = seriePnL(map, unidades, mesesTTM);
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
+  // Seleccion de unidad para el P&L (dropdown ?pnl=)
+  const unidadPnl = pnlSel ? unidades.find((u) => u.listingId === pnlSel) : undefined;
+  const seriePnlSel = unidadPnl ? seriePnL(map, [unidadPnl], mesesTTM) : serie;
+
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, revResumen, revNo5] = await Promise.all([
+  const [mix, pac, stats, revResumen, revNo5, cleanCost, opexCats] = await Promise.all([
     mixCanales(periodMeses),
     pacing(),
     statsReservas(periodMeses),
     resumenReviews(undefined, desde, hastaExcl),
     reviewsNo5(undefined, desde, hastaExcl),
+    costesLimpieza(periodMeses, unidadPnl?.nickname),
+    costesPorCategoria(periodMeses, unidadPnl?.nickname),
   ]);
+
+  // Margen NOI y desglose de limpieza (sobre el periodo, portfolio o unidad pnl)
+  const rPnl = unidadPnl ? sumar(itemsUnidad(unidadPnl, periodMeses)) : rAct;
+  const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
+  const margenPrior = rPrior.brutos > 0 ? rPrior.noi / rPrior.brutos : null;
+  const baseLimp = rPnl.alojamiento + rPnl.limpieza;
+  const comisionLimpieza = baseLimp > 0 ? (rPnl.comisiones * rPnl.limpieza) / baseLimp : 0;
 
   const unidadesActivas = unidades.filter((u) => u.activo).length;
 
@@ -179,7 +198,10 @@ export default async function PortfolioPage({
 
       <div className="flex items-baseline justify-between">
         <h1 className="text-lg font-semibold text-ink">
-          Portfolio <span className="text-muted">· {etiqueta} ({mesLabel(mes)})</span>
+          Portfolio{" "}
+          <span className="text-muted">
+            · {etiqueta} ({mesLabel(mes)}) · {num(unidadesActivas)} unidades activas
+          </span>
         </h1>
       </div>
 
@@ -199,13 +221,14 @@ export default async function PortfolioPage({
         <KpiCard label="NOI" value={eur(rAct.noi)}
           deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
           deltaYoY={delta(rAct.noi, rPrior.noi)} />
-        <KpiCard label="Unidades activas" value={num(unidadesActivas)}
-          sub={`${num(rAct.vendidas)} noches vendidas`} />
+        <KpiCard label="Margen NOI" value={pct(margenNOI)}
+          deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
+          deltaYoY={delta(margenNOI, margenPrior)} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <MiniStat label="Ingresos brutos" value={eur(rAct.brutos)} />
-        <MiniStat label="Ingresos limpieza" value={eur(rAct.limpieza)} />
+        <MiniStat label="Noches vendidas" value={num(rAct.vendidas)} />
         <MiniStat label="Noches disponibles" value={num(rAct.disponibles)} />
         <MiniStat label="Noches bloqueadas" value={num(rAct.bloqueadas)} />
         <MiniStat label="Estancia media" value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} n` : "-"} />
@@ -238,10 +261,31 @@ export default async function PortfolioPage({
         <UnitsTable filas={filas} mes={mes} total={total} />
       </Card>
 
-      <Card>
-        <SectionTitle>P&amp;L del portfolio (ultimos 12 meses)</SectionTitle>
-        <PnLTable serie={serie} />
+      <Card className="scroll-mt-24">
+        <div id="pnl" className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-faint">
+            P&amp;L (ultimos 12 meses){unidadPnl ? ` · ${unidadPnl.displayName}` : " · portfolio"}
+          </h2>
+          <PnLUnitPicker
+            mes={mes}
+            periodo={periodo}
+            pnl={pnlSel}
+            unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
+          />
+        </div>
+        <PnLTable serie={seriePnlSel} />
       </Card>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <SectionTitle>Limpieza · impacto neto · {etiqueta}</SectionTitle>
+          <CleaningImpact ingresos={rPnl.limpieza} costes={cleanCost} comision={comisionLimpieza} />
+        </Card>
+        <Card>
+          <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
+          <OpexDetalle categorias={opexCats} />
+        </Card>
+      </div>
     </Shell>
   );
 }

@@ -10,6 +10,8 @@ import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
 import ReviewsCard from "@/components/ReviewsCard";
+import CleaningImpact from "@/components/CleaningImpact";
+import OpexDetalle from "@/components/OpexDetalle";
 import { semaforoRentabilidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, pctDirecto, delta } from "@/lib/format";
 import {
@@ -27,6 +29,8 @@ import {
   statsReservas,
   reservasDelMes,
   costesDetalle,
+  costesLimpieza,
+  costesPorCategoria,
   resumenReviews,
   reviewsNo5,
   ttm,
@@ -103,17 +107,24 @@ export default async function UnidadPage({
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, reservas, costes, revResumen, revNo5] = await Promise.all([
-    mixCanales(periodMeses, u.listingId),
-    pacing(u.listingId),
-    statsReservas(periodMeses, u.listingId),
-    reservasDelMes(u.listingId, mes),
-    costesDetalle(u.nickname, mes),
-    resumenReviews(u.listingId, desde, hastaExcl),
-    reviewsNo5(u.listingId, desde, hastaExcl),
-  ]);
+  const [mix, pac, stats, reservas, costes, revResumen, revNo5, cleanCost, opexCats] =
+    await Promise.all([
+      mixCanales(periodMeses, u.listingId),
+      pacing(u.listingId),
+      statsReservas(periodMeses, u.listingId),
+      reservasDelMes(u.listingId, mes),
+      costesDetalle(u.nickname, mes),
+      resumenReviews(u.listingId, desde, hastaExcl),
+      reviewsNo5(u.listingId, desde, hastaExcl),
+      costesLimpieza(periodMeses, u.nickname),
+      costesPorCategoria(periodMeses, u.nickname),
+    ]);
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
+  const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
+  const margenPrior = rPrior.brutos > 0 ? rPrior.noi / rPrior.brutos : null;
+  const baseLimp = rAct.alojamiento + rAct.limpieza;
+  const comisionLimpieza = baseLimp > 0 ? (rAct.comisiones * rAct.limpieza) / baseLimp : 0;
 
   return (
     <div className="min-h-screen">
@@ -148,7 +159,7 @@ export default async function UnidadPage({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
           <KpiCard label="Ocupacion" value={pct(occ)}
             deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
             deltaYoY={delta(occ, ocupacionDe(rPrior))} />
@@ -164,6 +175,9 @@ export default async function UnidadPage({
           <KpiCard label="NOI" value={eur(rAct.noi)}
             deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
             deltaYoY={delta(rAct.noi, rPrior.noi)} />
+          <KpiCard label="Margen NOI" value={pct(margenNOI)}
+            deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
+            deltaYoY={delta(margenNOI, margenPrior)} />
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -198,6 +212,17 @@ export default async function UnidadPage({
           <SectionTitle>P&amp;L mensual (ultimos 12 meses)</SectionTitle>
           <PnLTable serie={serie} />
         </Card>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card>
+            <SectionTitle>Limpieza · impacto neto · {etiqueta}</SectionTitle>
+            <CleaningImpact ingresos={rAct.limpieza} costes={cleanCost} comision={comisionLimpieza} />
+          </Card>
+          <Card>
+            <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
+            <OpexDetalle categorias={opexCats} />
+          </Card>
+        </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2">

@@ -175,18 +175,31 @@ async function nightsPorUnidadMes(
 }
 
 async function availPorUnidadMes(meses: string[]): Promise<Map<string, AvailAgg>> {
+  // Solo se cuentan noches desde que la unidad empezo a operar (primera noche
+  // vendida o fecha_inicio configurada), para no distorsionar la ocupacion de
+  // unidades nuevas (p. ej. Paco Romo, Ibarra 2).
   const rows = await query<{
     listing_id: string;
     mes: string;
     disponibles: string;
     bloqueadas: string;
   }>(
-    `SELECT listing_id, mes,
-            COUNT(*) FILTER (WHERE is_available) AS disponibles,
-            COUNT(*) FILTER (WHERE is_blocked) AS bloqueadas
-     FROM listing_availability
-     WHERE mes = ANY($1)
-     GROUP BY listing_id, mes`,
+    `WITH starts AS (
+       SELECT l.id AS listing_id,
+              COALESCE(s.fecha_inicio,
+                       (SELECT MIN(night) FROM reservation_nights n WHERE n.listing_id = l.id)
+              ) AS inicio
+       FROM listings l LEFT JOIN unit_settings s ON s.listing_id = l.id
+     )
+     SELECT a.listing_id, a.mes,
+            COUNT(*) FILTER (WHERE a.is_available) AS disponibles,
+            COUNT(*) FILTER (WHERE a.is_blocked) AS bloqueadas
+     FROM listing_availability a
+     JOIN starts st ON st.listing_id = a.listing_id
+     WHERE a.mes = ANY($1)
+       AND st.inicio IS NOT NULL
+       AND a.date >= st.inicio
+     GROUP BY a.listing_id, a.mes`,
     [meses],
   );
   const m = new Map<string, AvailAgg>();
@@ -697,6 +710,59 @@ export async function reviewsNo5(
     guest: r.guest,
     listingId: r.listing_id,
   }));
+}
+
+/** Coste de limpieza (limpieza_extra) en un periodo, opcionalmente por unidad. */
+export async function costesLimpieza(
+  meses: string[],
+  nickname?: string,
+): Promise<number> {
+  const row = await queryOne<{ t: number }>(
+    `SELECT COALESCE(SUM(importe_eur),0) AS t FROM cost_rows
+     WHERE categoria = 'limpieza_extra' AND mes = ANY($1)
+       ${nickname ? "AND unidad = $2" : ""}`,
+    nickname ? [meses, nickname] : [meses],
+  );
+  return row?.t ?? 0;
+}
+
+/** Costes agrupados por categoria y concepto en un periodo (para desplegable). */
+export interface CategoriaCoste {
+  categoria: string;
+  total: number;
+  estimado: boolean;
+  conceptos: { concepto: string; importe: number }[];
+}
+export async function costesPorCategoria(
+  meses: string[],
+  nickname?: string,
+): Promise<CategoriaCoste[]> {
+  const rows = await query<{
+    categoria: string;
+    concepto: string | null;
+    importe: number;
+    estimado: boolean;
+  }>(
+    `SELECT categoria, concepto, SUM(importe_eur)::float AS importe,
+            bool_or(estimado) AS estimado
+     FROM cost_rows
+     WHERE mes = ANY($1) ${nickname ? "AND unidad = $2" : ""}
+     GROUP BY categoria, concepto
+     ORDER BY categoria, importe DESC`,
+    nickname ? [meses, nickname] : [meses],
+  );
+  const map = new Map<string, CategoriaCoste>();
+  for (const r of rows) {
+    let c = map.get(r.categoria);
+    if (!c) {
+      c = { categoria: r.categoria, total: 0, estimado: false, conceptos: [] };
+      map.set(r.categoria, c);
+    }
+    c.total += r.importe;
+    c.estimado = c.estimado || r.estimado;
+    c.conceptos.push({ concepto: r.concepto ?? "-", importe: r.importe });
+  }
+  return [...map.values()].sort((a, b) => b.total - a.total);
 }
 
 // --- Estado de datos (para el banner) ---
