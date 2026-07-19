@@ -377,13 +377,19 @@ export async function runSync(opts: {
         errores.push(...errCostes);
         costRowsCount = rows.length;
         await withTransaction(async (client) => {
-          await client.query("DELETE FROM cost_rows");
+          // Solo se reemplazan las filas cuyo origen es la hoja; los costes
+          // cargados aparte (Excel historico, estimados) se conservan.
+          await client.query(
+            "DELETE FROM cost_rows WHERE origen = 'hoja' OR origen IS NULL",
+          );
           if (rows.length) {
             await bulkInsert(
               client,
               "cost_rows",
-              ["mes", "unidad", "categoria", "concepto", "importe_eur"],
-              rows.map((r) => [r.mes, r.unidad, r.categoria, r.concepto, r.importe_eur]),
+              ["mes", "unidad", "categoria", "concepto", "importe_eur", "estimado", "origen"],
+              rows.map((r) => [
+                r.mes, r.unidad, r.categoria, r.concepto, r.importe_eur, false, "hoja",
+              ]),
             );
           }
         });
