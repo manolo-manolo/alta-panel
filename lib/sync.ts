@@ -178,8 +178,17 @@ export async function runSync(opts: {
 
   const cursor = await getState("reservations_cursor");
   const isoWeekday = Number(formatInTimeZone(startedAt, TZ, "i")); // 1=lunes
+  // Si la tabla de reservas esta vacia, forzamos full aunque haya cursor
+  // (caso tipico: primer backfill despues de arrancar).
+  const resCount = await queryOne<{ n: number }>(
+    "SELECT count(*)::int AS n FROM reservations",
+  );
+  const tablaReservasVacia = (resCount?.n ?? 0) === 0;
   const mode: "full" | "incremental" =
-    opts.forceFull || !cursor || (opts.kind === "cron" && isoWeekday === 1)
+    opts.forceFull ||
+    !cursor ||
+    tablaReservasVacia ||
+    (opts.kind === "cron" && isoWeekday === 1)
       ? "full"
       : "incremental";
 

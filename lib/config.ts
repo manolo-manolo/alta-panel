@@ -98,4 +98,5 @@ export const CATEGORIA_LABEL: Record<Categoria, string> = {
 
 export const COOKIE_SESION = "alta_panel_sesion";
 export const SESION_DIAS = 30;
-export const REFRESH_RATE_LIMIT_MIN = 10;
+// Limite de refresco manual, en minutos. 0 = sin limite (temporal, para pruebas).
+export const REFRESH_RATE_LIMIT_MIN = 0;
