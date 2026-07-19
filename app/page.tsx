@@ -50,12 +50,14 @@ export default async function PortfolioPage({
   let unidades;
   try {
     unidades = await getUnidades();
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("Error de base de datos en portfolio:", e);
     return (
       <Shell mes={mes} unidades={[]} ultima={estado.ultimoExito}>
         <SetupNotice
           titulo="Base de datos no disponible"
-          detalle="No se pudo conectar con la base de datos. Revisa la migracion y las variables de entorno."
+          detalle={`Detalle tecnico: ${msg}`}
         />
       </Shell>
     );
