@@ -60,7 +60,11 @@ export default async function UnidadPage({
   if (!u) {
     return (
       <div className="min-h-screen">
-        <TopBar mes={mes} unidades={unidades} ultimaActualizacion={estado.ultimoExito} />
+        <TopBar
+          mes={mes}
+          unidades={unidades.map((x) => ({ listingId: x.listingId, nombre: x.displayName }))}
+          ultimaActualizacion={estado.ultimoExito}
+        />
         <main className="mx-auto max-w-7xl px-4 py-8">
           <SetupNotice titulo="Unidad no encontrada" />
         </main>
@@ -100,7 +104,7 @@ export default async function UnidadPage({
     <div className="min-h-screen">
       <TopBar
         mes={mes}
-        unidades={unidades}
+        unidades={unidades.map((x) => ({ listingId: x.listingId, nombre: x.displayName }))}
         unidadId={u.listingId}
         ultimaActualizacion={estado.ultimoExito}
       />
@@ -110,7 +114,7 @@ export default async function UnidadPage({
         {/* Cabecera de unidad */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-xl font-semibold text-ink">{u.nickname}</h1>
+            <h1 className="text-xl font-semibold text-ink">{u.displayName}</h1>
             <p className="text-sm text-muted">
               {u.tipo === "propiedad"
                 ? "Propiedad"

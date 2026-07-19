@@ -126,6 +126,41 @@ CREATE TABLE IF NOT EXISTS units_meta (
 );
 
 -- ---------------------------------------------------------------------------
+-- Ajustes de unidad editables desde la UI. Tienen prioridad sobre la hoja
+-- (units_meta). Permiten nombre personalizado y coste de adquisicion sin
+-- depender de la hoja de Google.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS unit_settings (
+  listing_id                    TEXT PRIMARY KEY,
+  display_name                  TEXT,
+  tipo                          TEXT,   -- propiedad | master_lease
+  coste_total_adquisicion_eur   NUMERIC(14,2),
+  renta_mensual_eur             NUMERIC(14,2),
+  fecha_inicio                  DATE,
+  updated_at                    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ---------------------------------------------------------------------------
+-- Reviews de Guesty.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reviews (
+  id             TEXT PRIMARY KEY,
+  listing_id     TEXT,
+  reservation_id TEXT,
+  channel        TEXT,
+  rating         NUMERIC(4,2),   -- normalizado a escala 0-5
+  rating_raw     NUMERIC(6,2),   -- valor original
+  rating_scale   INTEGER,        -- 5 o 10 segun canal
+  guest_name     TEXT,
+  content        TEXT,
+  review_date    TIMESTAMPTZ,
+  raw            JSONB,
+  synced_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews (listing_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_reservation ON reviews (reservation_id);
+
+-- ---------------------------------------------------------------------------
 -- Estado del sync (cursor incremental, ultima actualizacion, rate limit).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS sync_state (

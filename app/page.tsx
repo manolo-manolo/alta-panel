@@ -103,7 +103,7 @@ export default async function PortfolioPage({
       u.tipo === "propiedad" ? nt.yieldPct : u.tipo === "master_lease" ? nt.margenPct : null;
     return {
       listingId: u.listingId,
-      nickname: u.nickname,
+      nickname: u.displayName,
       tipo: u.tipo,
       ocupacion: um.ocupacion,
       adr: um.adr,
@@ -203,7 +203,7 @@ function Shell({
   children,
 }: {
   mes: string;
-  unidades: { listingId: string; nickname: string }[];
+  unidades: { listingId: string; displayName: string }[];
   ultima: string | null;
   children: React.ReactNode;
 }) {
@@ -211,7 +211,7 @@ function Shell({
     <div className="min-h-screen">
       <TopBar
         mes={mes}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nickname: u.nickname }))}
+        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
         ultimaActualizacion={ultima}
       />
       <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">

@@ -7,7 +7,7 @@ import { mesLabel, fechaHora } from "@/lib/format";
 
 interface UnidadOpt {
   listingId: string;
-  nickname: string;
+  nombre: string;
 }
 
 export default function TopBar({
@@ -115,7 +115,7 @@ export default function TopBar({
             <option value="">Todo el portfolio</option>
             {unidades.map((u) => (
               <option key={u.listingId} value={u.listingId}>
-                {u.nickname}
+                {u.nombre}
               </option>
             ))}
           </select>
@@ -127,6 +127,13 @@ export default function TopBar({
           >
             {refrescando ? "Actualizando..." : "Actualizar datos"}
           </button>
+
+          <a
+            href="/ajustes"
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
+          >
+            Ajustes
+          </a>
 
           <button
             onClick={salir}

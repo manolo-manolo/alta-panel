@@ -110,10 +110,36 @@ export async function GET() {
       };
     }
 
+    // 4) Reviews (para conocer la forma del objeto y la escala de rating)
+    const rev = await jget(
+      `${BASE}/reviews?limit=3&includeCustomChannels=true`,
+      token,
+    );
+    const revBody = rev.body as Record<string, unknown>;
+    const revArr =
+      (revBody?.data as { reviews?: unknown[] })?.reviews ??
+      (Array.isArray(revBody?.data) ? (revBody.data as unknown[]) : null) ??
+      (Array.isArray(revBody?.results) ? (revBody.results as unknown[]) : null) ??
+      (Array.isArray(rev.body) ? (rev.body as unknown[]) : null);
+    const primerReview = Array.isArray(revArr)
+      ? (revArr[0] as Record<string, unknown>)
+      : null;
+    const reviews = {
+      status: rev.status,
+      envelopeKeys: revBody ? Object.keys(revBody) : null,
+      dataKeys:
+        revBody?.data && typeof revBody.data === "object" && !Array.isArray(revBody.data)
+          ? Object.keys(revBody.data as object)
+          : null,
+      n: Array.isArray(revArr) ? revArr.length : null,
+      primerReview: primerReview ? primerReview : null,
+    };
+
     return NextResponse.json({
       reservas_con_filtro: { status: r2.status, resumen: resumenLista(r2.body) },
       reservas_muestra: muestra,
       calendario,
+      reviews,
     });
   } catch (e) {
     return NextResponse.json(

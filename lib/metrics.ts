@@ -22,11 +22,13 @@ const FIJAS = CATEGORIAS_FIJAS as unknown as string[];
 // --- Tipos ---
 export interface UnidadInfo {
   listingId: string;
-  nickname: string;
+  nickname: string; // nickname real de Guesty (clave de union con costes)
+  displayName: string; // nombre a mostrar (editable)
   activo: boolean;
   tipo: TipoUnidad | null;
   costeAdquisicion: number | null;
   rentaMensual: number | null;
+  fechaInicio: string | null;
 }
 
 export interface UnidadMes {
@@ -74,24 +76,66 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
     id: string;
     nickname: string | null;
     active: boolean;
+    display_name: string | null;
     tipo: string | null;
-    coste_total_adquisicion_eur: number | null;
-    renta_mensual_eur: number | null;
+    coste: number | null;
+    renta: number | null;
+    fecha_inicio: string | null;
   }>(
     `SELECT l.id, l.nickname, l.active,
-            u.tipo, u.coste_total_adquisicion_eur, u.renta_mensual_eur
+            COALESCE(s.display_name, l.nickname)                              AS display_name,
+            COALESCE(s.tipo, u.tipo)                                          AS tipo,
+            COALESCE(s.coste_total_adquisicion_eur, u.coste_total_adquisicion_eur) AS coste,
+            COALESCE(s.renta_mensual_eur, u.renta_mensual_eur)               AS renta,
+            COALESCE(s.fecha_inicio, u.fecha_inicio)                          AS fecha_inicio
      FROM listings l
      LEFT JOIN units_meta u ON u.unidad = l.nickname
-     ORDER BY l.nickname NULLS LAST`,
+     LEFT JOIN unit_settings s ON s.listing_id = l.id
+     ORDER BY display_name NULLS LAST`,
   );
   return rows.map((r) => ({
     listingId: r.id,
     nickname: r.nickname ?? "(sin nickname)",
+    displayName: r.display_name ?? r.nickname ?? "(sin nombre)",
     activo: r.active,
     tipo: (r.tipo as TipoUnidad | null) ?? null,
-    costeAdquisicion: r.coste_total_adquisicion_eur,
-    rentaMensual: r.renta_mensual_eur,
+    costeAdquisicion: r.coste,
+    rentaMensual: r.renta,
+    fechaInicio: r.fecha_inicio,
   }));
+}
+
+export interface UnitSettingsInput {
+  displayName: string | null;
+  tipo: TipoUnidad | null;
+  costeAdquisicion: number | null;
+  rentaMensual: number | null;
+  fechaInicio: string | null;
+}
+
+/** Guarda (upsert) los ajustes editables de una unidad. */
+export async function guardarUnitSettings(
+  listingId: string,
+  s: UnitSettingsInput,
+): Promise<void> {
+  await query(
+    `INSERT INTO unit_settings
+       (listing_id, display_name, tipo, coste_total_adquisicion_eur, renta_mensual_eur, fecha_inicio, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6, now())
+     ON CONFLICT (listing_id) DO UPDATE SET
+       display_name=EXCLUDED.display_name, tipo=EXCLUDED.tipo,
+       coste_total_adquisicion_eur=EXCLUDED.coste_total_adquisicion_eur,
+       renta_mensual_eur=EXCLUDED.renta_mensual_eur,
+       fecha_inicio=EXCLUDED.fecha_inicio, updated_at=now()`,
+    [
+      listingId,
+      s.displayName,
+      s.tipo,
+      s.costeAdquisicion,
+      s.rentaMensual,
+      s.fechaInicio,
+    ],
+  );
 }
 
 // --- Agregados base por unidad y mes (para un conjunto de meses) ---
