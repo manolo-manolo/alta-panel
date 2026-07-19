@@ -19,7 +19,14 @@ export default function CostBreakdown({ costes }: { costes: CosteDetalle[] }) {
             <td className="px-2 py-1.5 text-left text-muted">
               {CATEGORIA_LABEL[c.categoria as Categoria] ?? c.categoria}
             </td>
-            <td className="px-2 py-1.5 text-left text-ink">{c.concepto ?? "-"}</td>
+            <td className="px-2 py-1.5 text-left text-ink">
+              {c.concepto ?? "-"}
+              {c.estimado && (
+                <span className="ml-1 text-xs text-brand" title="Estimado por run-rate">
+                  (est.)
+                </span>
+              )}
+            </td>
             <td className="px-2 py-1.5 text-right text-ink">{eur(c.importe)}</td>
           </tr>
         ))}

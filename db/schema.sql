@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS cost_rows (
 );
 CREATE INDEX IF NOT EXISTS idx_costs_unidad_mes ON cost_rows (unidad, mes);
 CREATE INDEX IF NOT EXISTS idx_costs_mes ON cost_rows (mes);
+-- Marcas de origen y si el importe es estimado (run-rate / estacionalidad).
+ALTER TABLE cost_rows ADD COLUMN IF NOT EXISTS estimado BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE cost_rows ADD COLUMN IF NOT EXISTS origen TEXT;
 
 -- ---------------------------------------------------------------------------
 -- Metadatos de unidades de la hoja "Unidades".

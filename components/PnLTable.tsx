@@ -52,10 +52,18 @@ export default function PnLTable({ serie }: { serie: PnLMes[] }) {
             {serie.map((m) => (
               <th key={m.mes} className="px-2 py-2 text-right font-medium">
                 <span className="capitalize">{mesCorto(m.mes)}</span>
+                {m.costesEstimados && (
+                  <span
+                    className="ml-1 text-brand"
+                    title="Costes estimados (run-rate)"
+                  >
+                    ~
+                  </span>
+                )}
                 {m.costesPendientes && (
                   <span
                     className="ml-1 text-warn"
-                    title="Costes pendientes en la hoja"
+                    title="Costes pendientes"
                   >
                     •
                   </span>
@@ -92,6 +100,10 @@ export default function PnLTable({ serie }: { serie: PnLMes[] }) {
           ))}
         </tbody>
       </table>
+      <p className="mt-2 text-xs text-faint">
+        <span className="text-brand">~</span> costes estimados por run-rate ·{" "}
+        <span className="text-warn">•</span> costes pendientes
+      </p>
     </div>
   );
 }

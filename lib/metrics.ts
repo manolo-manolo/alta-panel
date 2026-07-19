@@ -52,6 +52,7 @@ export interface UnidadMes {
   tieneIngresos: boolean;
   tieneCostes: boolean;
   costesPendientes: boolean;
+  costesEstimados: boolean;
 }
 
 interface NightAgg {
@@ -68,6 +69,7 @@ interface CostAgg {
   variables: number;
   fijas: number;
   filas: number;
+  estimadas: number;
 }
 
 // --- Catalogo de unidades (listing + metadatos de la hoja) ---
@@ -205,11 +207,13 @@ async function costesPorUnidadMes(meses: string[]): Promise<Map<string, CostAgg>
     variables: number;
     fijas: number;
     filas: string;
+    estimadas: string;
   }>(
     `SELECT unidad, mes,
             COALESCE(SUM(importe_eur) FILTER (WHERE categoria = ANY($2)),0) AS variables,
             COALESCE(SUM(importe_eur) FILTER (WHERE categoria = ANY($3)),0) AS fijas,
-            COUNT(*) AS filas
+            COUNT(*) AS filas,
+            COUNT(*) FILTER (WHERE estimado) AS estimadas
      FROM cost_rows
      WHERE mes = ANY($1)
      GROUP BY unidad, mes`,
@@ -221,6 +225,7 @@ async function costesPorUnidadMes(meses: string[]): Promise<Map<string, CostAgg>
       variables: r.variables,
       fijas: r.fijas,
       filas: Number(r.filas),
+      estimadas: Number(r.estimadas),
     });
   }
   return m;
@@ -267,6 +272,7 @@ function construirUnidadMes(
     tieneIngresos,
     tieneCostes,
     costesPendientes: tieneIngresos && !tieneCostes,
+    costesEstimados: (cost?.estimadas ?? 0) > 0,
   };
 }
 
@@ -381,6 +387,7 @@ export function serieMensual(
 export interface PnLMes extends Rollup {
   mes: string;
   costesPendientes: boolean;
+  costesEstimados: boolean;
 }
 
 export function seriePnL(
@@ -394,7 +401,8 @@ export function seriePnL(
       .filter((x): x is UnidadMes => !!x);
     const r = sumar(items);
     const costesPendientes = items.some((it) => it.costesPendientes);
-    return { mes, ...r, costesPendientes };
+    const costesEstimados = items.some((it) => it.costesEstimados);
+    return { mes, ...r, costesPendientes, costesEstimados };
   });
 }
 
@@ -557,13 +565,14 @@ export interface CosteDetalle {
   categoria: string;
   concepto: string | null;
   importe: number;
+  estimado: boolean;
 }
 export async function costesDetalle(
   nickname: string,
   mes: string,
 ): Promise<CosteDetalle[]> {
   return query<CosteDetalle>(
-    `SELECT categoria, concepto, importe_eur AS importe
+    `SELECT categoria, concepto, importe_eur AS importe, estimado
      FROM cost_rows
      WHERE unidad = $1 AND mes = $2
      ORDER BY categoria, concepto`,
