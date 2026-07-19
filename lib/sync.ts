@@ -106,6 +106,48 @@ async function bulkInsert(
 
 const j = (v: unknown) => (v === null || v === undefined ? null : JSON.stringify(v));
 
+const RES_COLS = [
+  "id", "listing_id", "confirmation_code", "status", "source", "guest_name",
+  "check_in", "check_out", "nights", "currency",
+  "accommodation_eur", "cleaning_eur", "commission_eur", "total_payout_eur",
+  "money", "reservation_created_at", "last_updated_at", "raw",
+];
+
+/** Upsert masivo de reservas en bloques (evita miles de round-trips). */
+async function bulkUpsertReservations(
+  client: PoolClient,
+  rows: ReservationRow[],
+  chunkSize = 200,
+): Promise<void> {
+  const setClause = RES_COLS.filter((c) => c !== "id")
+    .map((c) => `${c}=EXCLUDED.${c}`)
+    .join(", ");
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const params: unknown[] = [];
+    const tuples: string[] = [];
+    for (const r of chunk) {
+      const vals = [
+        r.id, r.listing_id, r.confirmation_code, r.status, r.source, r.guest_name,
+        r.check_in, r.check_out, r.nights, r.currency,
+        r.accommodation_eur, r.cleaning_eur, r.commission_eur, r.total_payout_eur,
+        j(r.money), r.reservation_created_at, r.last_updated_at, j(r.raw),
+      ];
+      const ph: string[] = [];
+      for (const v of vals) {
+        params.push(v);
+        ph.push(`$${params.length}`);
+      }
+      tuples.push(`(${ph.join(",")})`);
+    }
+    await client.query(
+      `INSERT INTO reservations (${RES_COLS.join(",")}) VALUES ${tuples.join(",")}
+       ON CONFLICT (id) DO UPDATE SET ${setClause}, synced_at=now()`,
+      params,
+    );
+  }
+}
+
 // --- Ejecucion principal ---
 export async function runSync(opts: {
   kind: "cron" | "manual";
@@ -176,61 +218,46 @@ export async function runSync(opts: {
       updatedSince: mode === "incremental" ? cursor ?? undefined : undefined,
     });
 
-    const incluidas: ReservationRow[] = [];
+    const incluidasMap = new Map<string, ReservationRow>();
     const excluidasIds: string[] = [];
     for (const r of rawRes) {
       if (statusIncluido(r.status)) {
         const mapped = mapReservation(r);
-        if (mapped) incluidas.push(mapped);
+        if (mapped) incluidasMap.set(mapped.id, mapped); // dedupe por id
       } else if (r._id) {
         excluidasIds.push(r._id);
       }
     }
+    const incluidas = [...incluidasMap.values()];
     reservationsCount = incluidas.length;
 
     await withTransaction(async (client) => {
-      // Upsert de reservas incluidas
-      for (const r of incluidas) {
+      // Upsert masivo de reservas incluidas
+      await bulkUpsertReservations(client, incluidas);
+
+      // Reconstruir noches: borrar las de todas las reservas incluidas y
+      // reinsertar en bloque.
+      const ids = incluidas.map((r) => r.id);
+      if (ids.length) {
         await client.query(
-          `INSERT INTO reservations (
-             id, listing_id, confirmation_code, status, source, guest_name,
-             check_in, check_out, nights, currency,
-             accommodation_eur, cleaning_eur, commission_eur, total_payout_eur,
-             money, reservation_created_at, last_updated_at, raw, synced_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
-           ON CONFLICT (id) DO UPDATE SET
-             listing_id=EXCLUDED.listing_id, confirmation_code=EXCLUDED.confirmation_code,
-             status=EXCLUDED.status, source=EXCLUDED.source, guest_name=EXCLUDED.guest_name,
-             check_in=EXCLUDED.check_in, check_out=EXCLUDED.check_out, nights=EXCLUDED.nights,
-             currency=EXCLUDED.currency, accommodation_eur=EXCLUDED.accommodation_eur,
-             cleaning_eur=EXCLUDED.cleaning_eur, commission_eur=EXCLUDED.commission_eur,
-             total_payout_eur=EXCLUDED.total_payout_eur, money=EXCLUDED.money,
-             reservation_created_at=EXCLUDED.reservation_created_at,
-             last_updated_at=EXCLUDED.last_updated_at, raw=EXCLUDED.raw, synced_at=now()`,
-          [
-            r.id, r.listing_id, r.confirmation_code, r.status, r.source, r.guest_name,
-            r.check_in, r.check_out, r.nights, r.currency,
-            r.accommodation_eur, r.cleaning_eur, r.commission_eur, r.total_payout_eur,
-            j(r.money), r.reservation_created_at, r.last_updated_at, j(r.raw),
-          ],
+          "DELETE FROM reservation_nights WHERE reservation_id = ANY($1)",
+          [ids],
         );
-        // Reconstruir noches
-        await client.query("DELETE FROM reservation_nights WHERE reservation_id = $1", [r.id]);
-        const nights = dividirNoches(r);
-        if (nights.length) {
-          await bulkInsert(
-            client,
-            "reservation_nights",
-            [
-              "reservation_id", "listing_id", "night", "mes", "channel", "status",
-              "accommodation_eur", "commission_eur", "cleaning_eur",
-            ],
-            nights.map((n) => [
-              n.reservation_id, n.listing_id, n.night, n.mes, n.channel, n.status,
-              n.accommodation_eur, n.commission_eur, n.cleaning_eur,
-            ]),
-          );
-        }
+      }
+      const allNights = incluidas.flatMap((r) => dividirNoches(r));
+      if (allNights.length) {
+        await bulkInsert(
+          client,
+          "reservation_nights",
+          [
+            "reservation_id", "listing_id", "night", "mes", "channel", "status",
+            "accommodation_eur", "commission_eur", "cleaning_eur",
+          ],
+          allNights.map((n) => [
+            n.reservation_id, n.listing_id, n.night, n.mes, n.channel, n.status,
+            n.accommodation_eur, n.commission_eur, n.cleaning_eur,
+          ]),
+        );
       }
 
       // Borrar reservas que ahora estan canceladas/excluidas
