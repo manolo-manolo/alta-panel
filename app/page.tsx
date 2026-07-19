@@ -3,8 +3,10 @@ import TopBar from "@/components/TopBar";
 import Banner from "@/components/Banner";
 import SetupNotice from "@/components/SetupNotice";
 import { Card, KpiCard, SectionTitle, MiniStat } from "@/components/ui";
-import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
+import MetricChart from "@/components/charts/MetricChart";
 import ChannelTable from "@/components/ChannelTable";
+import Insights from "@/components/Insights";
+import { generarInsights } from "@/lib/insights";
 import PacingStrip from "@/components/PacingStrip";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
@@ -91,7 +93,10 @@ export default async function PortfolioPage({
   const priorMeses = desplazarMeses(periodMeses, -12);
   const prevMes = mesPrevio(mes);
   const mesesTTM = ttm(mes);
-  const todos = Array.from(new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes]));
+  const mesesTTMprev = desplazarMeses(mesesTTM, -12);
+  const todos = Array.from(
+    new Set([...periodMeses, ...priorMeses, ...mesesTTM, ...mesesTTMprev, prevMes]),
+  );
   const map = await unidadMesMap(unidades, todos);
 
   const itemsDe = (meses: string[]): UnidadMes[] =>
@@ -111,22 +116,47 @@ export default async function PortfolioPage({
   const revpar = revparDe(rAct);
 
   const serie = seriePnL(map, unidades, mesesTTM);
-  const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
+  const seriePrior = seriePnL(map, unidades, mesesTTMprev);
+  const chartData = serie.map((s) => ({
+    mes: s.mes,
+    ingresos: s.brutos,
+    noi: s.noi,
+    adr: s.vendidas > 0 ? s.alojamiento / s.vendidas : null,
+    occ: s.disponibles > 0 ? s.vendidas / s.disponibles : null,
+  }));
+  const totalesChart = (s: typeof serie) => {
+    const t = s.reduce(
+      (a, m) => ({
+        alo: a.alo + m.alojamiento, ven: a.ven + m.vendidas, dis: a.dis + m.disponibles,
+        ing: a.ing + m.brutos, noi: a.noi + m.noi,
+      }),
+      { alo: 0, ven: 0, dis: 0, ing: 0, noi: 0 },
+    );
+    return {
+      ingresos: t.ing, noi: t.noi,
+      adr: t.ven > 0 ? t.alo / t.ven : null,
+      occ: t.dis > 0 ? t.ven / t.dis : null,
+    };
+  };
+  const ttmTot = totalesChart(serie);
+  const ttmPrevTot = totalesChart(seriePrior);
 
   // Seleccion de unidad para el P&L (dropdown ?pnl=)
   const unidadPnl = pnlSel ? unidades.find((u) => u.listingId === pnlSel) : undefined;
   const seriePnlSel = unidadPnl ? seriePnL(map, [unidadPnl], mesesTTM) : serie;
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, revResumen, revNo5, cleanCost, opexCats] = await Promise.all([
-    mixCanales(periodMeses),
-    pacing(),
-    statsReservas(periodMeses),
-    resumenReviews(undefined, desde, hastaExcl),
-    reviewsNo5(undefined, desde, hastaExcl),
-    costesLimpieza(periodMeses, unidadPnl?.nickname),
-    costesPorCategoria(periodMeses, unidadPnl?.nickname),
-  ]);
+  const [mix, pac, stats, revResumen, revNo5, cleanCost, opexCats, cleanCostPortfolio] =
+    await Promise.all([
+      mixCanales(periodMeses),
+      pacing(),
+      statsReservas(periodMeses),
+      resumenReviews(undefined, desde, hastaExcl),
+      reviewsNo5(undefined, desde, hastaExcl),
+      costesLimpieza(periodMeses, unidadPnl?.nickname),
+      costesPorCategoria(periodMeses, unidadPnl?.nickname),
+      costesLimpieza(periodMeses),
+    ]);
 
   // Margen NOI y desglose de limpieza (sobre el periodo, portfolio o unidad pnl)
   const rPnl = unidadPnl ? sumar(itemsUnidad(unidadPnl, periodMeses)) : rAct;
@@ -190,6 +220,29 @@ export default async function PortfolioPage({
     costesPendientes: false,
   };
 
+  // Insights (portfolio)
+  const comisionLimpPortfolio =
+    rAct.alojamiento + rAct.limpieza > 0
+      ? (rAct.comisiones * rAct.limpieza) / (rAct.alojamiento + rAct.limpieza)
+      : 0;
+  const limpiezaNetoPortfolio = rAct.limpieza - cleanCostPortfolio - comisionLimpPortfolio;
+  const totalRevMix = mix.reduce((s, d) => s + d.revenue, 0);
+  const airbnbRev = mix.find((d) => d.canal === "airbnb")?.revenue ?? 0;
+  const insights = generarInsights({
+    occPortfolio: occ,
+    filas: filas.map((f) => ({
+      nombre: f.nickname, ocupacion: f.ocupacion, tipo: f.tipo,
+      rendimiento: f.rendimiento, rendimientoTipo: f.rendimientoTipo,
+      costesPendientes: f.costesPendientes,
+    })),
+    limpiezaNeto: limpiezaNetoPortfolio,
+    limpiezaMargen: rAct.limpieza > 0 ? limpiezaNetoPortfolio / rAct.limpieza : null,
+    pacing30Noches: pac[0]?.noches ?? 0,
+    pacing30NochesLY: pac[0]?.nochesLY ?? 0,
+    mixAirbnbPct: totalRevMix > 0 ? airbnbRev / totalRevMix : null,
+    ratingMedio: revResumen.ratingMedio,
+  });
+
   const etiqueta = etiquetaPeriodo(mes, periodo);
 
   return (
@@ -235,10 +288,17 @@ export default async function PortfolioPage({
         <MiniStat label="Ventana reserva" value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} d` : "-"} />
       </div>
 
+      {insights.length > 0 && (
+        <Card>
+          <SectionTitle>Insights y recomendaciones</SectionTitle>
+          <Insights insights={insights} />
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <SectionTitle>Ingresos y NOI (ultimos 12 meses)</SectionTitle>
-          <NoiRevenueChart data={serieChart} />
+          <SectionTitle>Evolucion (ultimos 12 meses)</SectionTitle>
+          <MetricChart data={chartData} ttm={ttmTot} ttmPrev={ttmPrevTot} />
         </Card>
         <Card>
           <SectionTitle>Mix de canales · {etiqueta}</SectionTitle>

@@ -1,8 +1,8 @@
 import { eur, pct } from "@/lib/format";
 
 /**
- * Impacto neto de la limpieza en el P&L: ingresos de limpieza menos el coste
- * de limpieza y la comision de OTA atribuible a esos ingresos de limpieza.
+ * Impacto neto de la limpieza: ingresos de limpieza menos coste de limpieza y
+ * menos la comision de OTA atribuible a esos ingresos. Version compacta.
  */
 export default function CleaningImpact({
   ingresos,
@@ -15,31 +15,19 @@ export default function CleaningImpact({
 }) {
   const neto = ingresos - costes - comision;
   const margen = ingresos > 0 ? neto / ingresos : null;
-  const fila = (label: string, valor: number, signo: "+" | "-" | "=") => (
-    <div className="flex items-center justify-between py-1 text-sm">
-      <span className="text-muted">{label}</span>
-      <span className={`tabular ${signo === "-" ? "text-bad" : "text-ink"}`}>
-        {signo === "-" ? "-" : signo === "+" ? "" : ""}
-        {eur(Math.abs(valor))}
-      </span>
-    </div>
-  );
   return (
     <div>
-      {fila("Ingresos limpieza", ingresos, "+")}
-      {fila("Costes limpieza", costes, "-")}
-      {fila("Comision OTA sobre limpieza", comision, "-")}
-      <div className="mt-1 flex items-center justify-between border-t border-line pt-2">
-        <span className="font-semibold text-ink">Impacto neto limpieza</span>
-        <span className={`tabular font-semibold ${neto >= 0 ? "text-ok" : "text-bad"}`}>
-          {eur(neto)}
+      <div className="flex items-baseline justify-between">
+        <span className="text-sm text-muted">Impacto neto limpieza</span>
+        <span className={`tabular text-xl font-semibold ${neto >= 0 ? "text-ok" : "text-bad"}`}>
+          {eur(neto)} {margen !== null && <span className="text-sm">({pct(margen)})</span>}
         </span>
       </div>
-      {margen !== null && (
-        <p className="mt-1 text-xs text-faint">
-          Margen sobre ingresos de limpieza: {pct(margen)}
-        </p>
-      )}
+      <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-faint">
+        <span>Ingresos {eur(ingresos)}</span>
+        <span>· Costes {eur(costes)}</span>
+        <span>· Comision OTA {eur(comision)}</span>
+      </div>
     </div>
   );
 }

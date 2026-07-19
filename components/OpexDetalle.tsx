@@ -13,16 +13,18 @@ export default function OpexDetalle({ categorias }: { categorias: CategoriaCoste
       {categorias.map((c) => (
         <details key={c.categoria} className="rounded-md border border-line/70">
           <summary className="flex cursor-pointer items-center justify-between px-3 py-2 text-sm">
-            <span className="text-ink">
+            <span className="font-medium text-ink">
               {CATEGORIA_LABEL[c.categoria as Categoria] ?? c.categoria}
-              {c.estimado && <span className="ml-1 text-xs text-brand" title="Incluye estimados">~</span>}
             </span>
             <span className="tabular text-ink">{eur(c.total)}</span>
           </summary>
           <div className="divide-y divide-line/50 border-t border-line/50">
             {c.conceptos.map((x, i) => (
               <div key={i} className="flex items-center justify-between px-3 py-1.5 text-sm">
-                <span className="text-muted">{x.concepto}</span>
+                <span className="text-muted">
+                  {x.concepto}
+                  {x.estimado && <span className="ml-1 text-xs text-brand">(est.)</span>}
+                </span>
                 <span className="tabular text-muted">{eur(x.importe)}</span>
               </div>
             ))}

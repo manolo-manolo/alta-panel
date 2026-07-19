@@ -184,11 +184,15 @@ function rango(desde: string, hasta: string): string[] {
   return out;
 }
 
-/** Genera estimaciones run-rate (limpieza por ingreso) a partir de los actuales cargados. */
+/**
+ * Genera estimaciones a nivel de CONCEPTO (Wifi, Guesty, Energia electrica...),
+ * conservando el nombre real. Run-rate para casi todo; la limpieza se proyecta
+ * por el ingreso real de limpieza de cada mes.
+ */
 async function estimar(client: PoolClient, mesActual: string): Promise<number> {
-  const { rows } = await client.query<{ unidad: string; categoria: string; mes: string; importe: number }>(
-    `SELECT unidad, categoria, mes, SUM(importe_eur)::float AS importe
-     FROM cost_rows WHERE origen = 'opex-excel' GROUP BY unidad, categoria, mes`,
+  const { rows } = await client.query<{ unidad: string; categoria: string; concepto: string | null; mes: string; importe: number }>(
+    `SELECT unidad, categoria, concepto, mes, SUM(importe_eur)::float AS importe
+     FROM cost_rows WHERE origen = 'opex-excel' GROUP BY unidad, categoria, concepto, mes`,
   );
   const rev = await client.query<{ unidad: string; mes: string; rev: number }>(
     `SELECT l.nickname AS unidad, n.mes, SUM(n.cleaning_eur)::float AS rev
@@ -198,13 +202,20 @@ async function estimar(client: PoolClient, mesActual: string): Promise<number> {
   for (const r of rev.rows) revMap[`${r.unidad}|${r.mes}`] = r.rev;
 
   const mesesUnidad: Record<string, Set<string>> = {};
-  const totalCat: Record<string, number> = {};
+  const totalConcepto: Record<string, { categoria: string; concepto: string; total: number }> = {};
+  const limpiezaTotalUnidad: Record<string, number> = {};
   const limpiezaMes: Record<string, Record<string, number>> = {};
   for (const r of rows) {
     (mesesUnidad[r.unidad] ??= new Set()).add(r.mes);
-    totalCat[`${r.unidad}|${r.categoria}`] = (totalCat[`${r.unidad}|${r.categoria}`] ?? 0) + r.importe;
-    if (r.categoria === "limpieza_extra") (limpiezaMes[r.unidad] ??= {})[r.mes] = (limpiezaMes[r.unidad]?.[r.mes] ?? 0) + r.importe;
+    const concepto = r.concepto ?? r.categoria;
+    const k = `${r.unidad}|${r.categoria}|${concepto}`;
+    (totalConcepto[k] ??= { categoria: r.categoria, concepto, total: 0 }).total += r.importe;
+    if (r.categoria === "limpieza_extra") {
+      limpiezaTotalUnidad[r.unidad] = (limpiezaTotalUnidad[r.unidad] ?? 0) + r.importe;
+      (limpiezaMes[r.unidad] ??= {})[r.mes] = (limpiezaMes[r.unidad]?.[r.mes] ?? 0) + r.importe;
+    }
   }
+
   const nuevas: { mes: string; unidad: string; categoria: string; concepto: string; importe: number; estimado: boolean; origen: string }[] = [];
   for (const [unidad, meses] of Object.entries(mesesUnidad)) {
     const orden = [...meses].sort();
@@ -216,17 +227,20 @@ async function estimar(client: PoolClient, mesActual: string): Promise<number> {
       const rv = revMap[`${unidad}|${mes}`]; if (rv > 0) { numer += c; denom += rv; }
     }
     const ratio = denom > 0 ? numer / denom : null;
-    const cats = new Set(rows.filter((r) => r.unidad === unidad).map((r) => r.categoria));
-    for (const categoria of cats) {
-      if (categoria === "limpieza_extra" && ratio !== null) {
+
+    for (const k of Object.keys(totalConcepto)) {
+      if (!k.startsWith(`${unidad}|`)) continue;
+      const { categoria, concepto, total } = totalConcepto[k];
+      if (categoria === "limpieza_extra" && ratio !== null && limpiezaTotalUnidad[unidad] > 0) {
+        const share = total / limpiezaTotalUnidad[unidad];
         for (const mes of estimarMeses) {
-          const v = ratio * (revMap[`${unidad}|${mes}`] ?? 0);
-          if (Math.abs(v) >= 0.5) nuevas.push({ mes, unidad, categoria, concepto: "Estimado (por ingreso limpieza)", importe: v, estimado: true, origen: "estimado" });
+          const v = ratio * (revMap[`${unidad}|${mes}`] ?? 0) * share;
+          if (Math.abs(v) >= 0.5) nuevas.push({ mes, unidad, categoria, concepto, importe: v, estimado: true, origen: "estimado" });
         }
       } else {
-        const media = (totalCat[`${unidad}|${categoria}`] ?? 0) / span;
+        const media = total / span;
         if (Math.abs(media) < 0.5) continue;
-        for (const mes of estimarMeses) nuevas.push({ mes, unidad, categoria, concepto: "Estimado (run-rate)", importe: media, estimado: true, origen: "estimado" });
+        for (const mes of estimarMeses) nuevas.push({ mes, unidad, categoria, concepto, importe: media, estimado: true, origen: "estimado" });
       }
     }
   }

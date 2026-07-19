@@ -77,6 +77,11 @@ export default function ReviewsCard({
             no5.map((r) => (
               <div key={r.id} className="px-3 py-3">
                 <div className="mb-1 flex flex-wrap items-center gap-2 text-sm">
+                  {r.unidad && (
+                    <span className="rounded bg-canvas px-1.5 py-0.5 text-xs font-medium text-ink">
+                      {r.unidad}
+                    </span>
+                  )}
                   <Estrellas rating={r.rating} />
                   <span className="tabular text-muted">
                     {r.rating !== null ? r.rating.toFixed(1) : "-"}

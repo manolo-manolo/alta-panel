@@ -1,5 +1,5 @@
 import type { PnLMes } from "@/lib/metrics";
-import { eur, mesCorto } from "@/lib/format";
+import { eur, mesCorto, pct } from "@/lib/format";
 
 /**
  * P&L mensual: lineas como filas, meses como columnas (con scroll horizontal
@@ -98,6 +98,19 @@ export default function PnLTable({ serie }: { serie: PnLMes[] }) {
               </td>
             </tr>
           ))}
+          <tr className="border-t border-line/60 text-muted">
+            <td className="sticky left-0 z-10 bg-surface px-2 py-1.5 text-left">
+              Margen NOI (NOI / ingresos)
+            </td>
+            {serie.map((m) => (
+              <td key={m.mes} className="px-2 py-1.5 text-right">
+                {m.brutos > 0 ? pct(m.noi / m.brutos) : "-"}
+              </td>
+            ))}
+            <td className="px-2 py-1.5 text-right font-semibold text-ink">
+              {total.brutos > 0 ? pct(total.noi / total.brutos) : "-"}
+            </td>
+          </tr>
         </tbody>
       </table>
       <p className="mt-2 text-xs text-faint">

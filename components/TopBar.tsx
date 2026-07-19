@@ -80,12 +80,19 @@ export default function TopBar({
     <header className="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <a href="/" className="text-base font-semibold tracking-tight text-brand">
-            Alta Panel
+          <a href="/" className="flex items-center gap-2">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M3 11.5 12 4l9 7.5" stroke="#0d7c74" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5 10.5V20h14v-9.5" stroke="#0d7c74" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M10 20v-5h4v5" stroke="#0a5f59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="text-base font-semibold tracking-tight text-ink">
+              Alta<span className="text-brand">Homes</span>
+            </span>
           </a>
           {unidadId && (
             <span className="rounded-md bg-canvas px-2 py-0.5 text-xs text-muted">
-              vista de unidad
+              unidad
             </span>
           )}
         </div>

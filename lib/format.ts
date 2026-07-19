@@ -1,21 +1,29 @@
 // Utilidades de formato en espanol (Espana). Sin simbolos de apertura de
 // interrogacion y sin guiones largos en ningun texto de la app.
 
+// useGrouping "always" fuerza el separador de miles tambien en numeros de 4
+// cifras (en es-ES por defecto 1.350 se mostraria como 1350).
 const nfEur0 = new Intl.NumberFormat("es-ES", {
   style: "currency",
   currency: "EUR",
   maximumFractionDigits: 0,
+  useGrouping: "always",
 });
 const nfEur2 = new Intl.NumberFormat("es-ES", {
   style: "currency",
   currency: "EUR",
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
+  useGrouping: "always",
 });
-const nfNum0 = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+const nfNum0 = new Intl.NumberFormat("es-ES", {
+  maximumFractionDigits: 0,
+  useGrouping: "always",
+});
 const nfNum1 = new Intl.NumberFormat("es-ES", {
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
+  useGrouping: "always",
 });
 
 export function eur(n: number | null | undefined, decimales = 0): string {

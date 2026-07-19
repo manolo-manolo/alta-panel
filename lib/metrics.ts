@@ -665,6 +665,7 @@ export interface ReviewNo5 {
   fecha: string | null;
   guest: string | null;
   listingId: string | null;
+  unidad: string | null;
 }
 
 /** Todas las reviews que no son de 5 estrellas (rating normalizado < 5). */
@@ -688,13 +689,17 @@ export async function reviewsNo5(
     review_date: string | null;
     guest: string | null;
     listing_id: string | null;
+    unidad: string | null;
   }>(
     `SELECT rv.id, rv.channel, rv.rating, rv.rating_raw, rv.rating_scale,
             rv.content, rv.review_date,
             COALESCE(rv.guest_name, r.guest_name) AS guest,
-            rv.listing_id
+            rv.listing_id,
+            COALESCE(s.display_name, l.nickname) AS unidad
      FROM reviews rv
      LEFT JOIN reservations r ON r.confirmation_code = rv.reservation_id
+     LEFT JOIN listings l ON l.id = rv.listing_id
+     LEFT JOIN unit_settings s ON s.listing_id = rv.listing_id
      WHERE ${conds.join(" AND ")}
      ORDER BY rv.review_date DESC NULLS LAST`,
     params,
@@ -709,6 +714,7 @@ export async function reviewsNo5(
     fecha: r.review_date,
     guest: r.guest,
     listingId: r.listing_id,
+    unidad: r.unidad,
   }));
 }
 
@@ -731,7 +737,7 @@ export interface CategoriaCoste {
   categoria: string;
   total: number;
   estimado: boolean;
-  conceptos: { concepto: string; importe: number }[];
+  conceptos: { concepto: string; importe: number; estimado: boolean }[];
 }
 export async function costesPorCategoria(
   meses: string[],
@@ -760,7 +766,7 @@ export async function costesPorCategoria(
     }
     c.total += r.importe;
     c.estimado = c.estimado || r.estimado;
-    c.conceptos.push({ concepto: r.concepto ?? "-", importe: r.importe });
+    c.conceptos.push({ concepto: r.concepto ?? "-", importe: r.importe, estimado: r.estimado });
   }
   return [...map.values()].sort((a, b) => b.total - a.total);
 }
