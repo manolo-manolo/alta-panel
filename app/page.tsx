@@ -7,7 +7,12 @@ import MetricChart from "@/components/charts/MetricChart";
 import ChannelTable from "@/components/ChannelTable";
 import Insights from "@/components/Insights";
 import { generarInsights } from "@/lib/insights";
-import PacingStrip from "@/components/PacingStrip";
+import { generarInsightsForward } from "@/lib/forward-insights";
+import ForwardOutlook from "@/components/ForwardOutlook";
+import ForwardMatrix, { type FilaForward } from "@/components/ForwardMatrix";
+import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
+import { forwardKpis } from "@/lib/forward";
+import { sumarMeses } from "@/lib/time";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
 import OpexDetalle from "@/components/OpexDetalle";
@@ -24,7 +29,6 @@ import {
   revparDe,
   seriePnL,
   mixCanales,
-  pacing,
   estadoDatos,
   statsReservas,
   resumenReviews,
@@ -41,7 +45,6 @@ import {
   etiquetaPeriodo,
   type Periodo,
   type UnidadMes,
-  type Rollup,
   type UnidadInfo,
 } from "@/lib/metrics";
 
@@ -93,8 +96,12 @@ export default async function PortfolioPage({
   const prevMes = mesPrevio(mes);
   const mesesTTM = ttm(mes);
   const mesesTTMprev = desplazarMeses(mesesTTM, -12);
+  // Proximos 6 meses (relativos a hoy, no al mes seleccionado).
+  const mesesForward = Array.from({ length: 6 }, (_, i) =>
+    sumarMeses(mesPorDefecto(), i + 1),
+  );
   const todos = Array.from(
-    new Set([...periodMeses, ...priorMeses, ...mesesTTM, ...mesesTTMprev, prevMes]),
+    new Set([...periodMeses, ...priorMeses, ...mesesTTM, ...mesesTTMprev, prevMes, ...mesesForward]),
   );
   const map = await unidadMesMap(unidades, todos);
 
@@ -145,10 +152,10 @@ export default async function PortfolioPage({
   const seriePnlSel = unidadPnl ? seriePnL(map, [unidadPnl], mesesTTM) : serie;
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, revResumen, revNo5, opexCats, cleanCostPortfolio] =
+  const [mix, fwd, stats, revResumen, revNo5, opexCats, cleanCostPortfolio] =
     await Promise.all([
       mixCanales(periodMeses),
-      pacing(),
+      forwardKpis(unidades.map((u) => u.listingId)),
       statsReservas(periodMeses),
       resumenReviews(undefined, desde, hastaExcl),
       reviewsNo5(undefined, desde, hastaExcl),
@@ -240,10 +247,59 @@ export default async function PortfolioPage({
     })),
     limpiezaNeto: limpiezaNetoPortfolio,
     limpiezaMargen: rAct.limpieza > 0 ? limpiezaNetoPortfolio / rAct.limpieza : null,
-    pacing30Noches: pac[0]?.noches ?? 0,
-    pacing30NochesLY: pac[0]?.nochesLY ?? 0,
     mixAirbnbPct: totalRevMix > 0 ? airbnbRev / totalRevMix : null,
     ratingMedio: revResumen.ratingMedio,
+  });
+
+  // Vision futura: filas por unidad para la matriz y consejos de revenue.
+  const ventanasFila = (listingId: string) =>
+    (fwd.porUnidad.get(listingId) ?? []).map((v) => ({
+      dias: v.dias,
+      occ: v.occ,
+      adr: v.adr,
+      occSTLY: v.occSTLY,
+      adrSTLY: v.adrSTLY,
+      noches: v.noches,
+      disponibles: v.disponibles,
+      revenue: v.revenue,
+    }));
+  const filasFwd: FilaForward[] = unidades.map((u) => ({
+    listingId: u.listingId,
+    nombre: u.displayName,
+    ventanas: ventanasFila(u.listingId),
+  }));
+  const totalFwd: FilaForward = {
+    listingId: "__total__",
+    nombre: "Portfolio",
+    ventanas: fwd.portfolio.map((v) => ({
+      dias: v.dias,
+      occ: v.occ,
+      adr: v.adr,
+      occSTLY: v.occSTLY,
+      adrSTLY: v.adrSTLY,
+      noches: v.noches,
+      disponibles: v.disponibles,
+      revenue: v.revenue,
+    })),
+  };
+  const insightsFwd = generarInsightsForward(
+    fwd.portfolio,
+    unidades.map((u) => ({
+      nombre: u.displayName,
+      ventanas: fwd.porUnidad.get(u.listingId) ?? [],
+    })),
+  );
+  const mesesFwdFilas: MesForward[] = mesesForward.map((m) => {
+    const r = sumar(itemsDe([m]));
+    return {
+      mes: m,
+      noches: r.vendidas,
+      disponibles: r.disponibles,
+      occ: ocupacionDe(r),
+      adr: adrDe(r),
+      revpar: revparDe(r),
+      revenue: r.alojamiento,
+    };
   });
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
@@ -310,8 +366,26 @@ export default async function PortfolioPage({
       </div>
 
       <Card>
-        <SectionTitle>Pacing (noches y revenue en cartera)</SectionTitle>
-        <PacingStrip pacing={pac} />
+        <SectionTitle>Vision futura · proximos 15/30/60/90 dias (on the books)</SectionTitle>
+        <ForwardOutlook ventanas={fwd.portfolio} />
+        {insightsFwd.length > 0 && (
+          <div className="mt-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
+              Consejos de revenue
+            </h3>
+            <Insights insights={insightsFwd} />
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionTitle>Ocupacion y ADR futuros por unidad</SectionTitle>
+        <ForwardMatrix filas={filasFwd} total={totalFwd} mes={mes} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Proximos 6 meses (on the books)</SectionTitle>
+        <ForwardMeses filas={mesesFwdFilas} />
       </Card>
 
       <Card>

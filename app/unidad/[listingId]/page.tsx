@@ -5,7 +5,12 @@ import SetupNotice from "@/components/SetupNotice";
 import { Card, KpiCard, SectionTitle, Chip, MiniStat } from "@/components/ui";
 import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
 import ChannelTable from "@/components/ChannelTable";
-import PacingStrip from "@/components/PacingStrip";
+import ForwardOutlook from "@/components/ForwardOutlook";
+import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
+import Insights from "@/components/Insights";
+import { forwardKpis } from "@/lib/forward";
+import { generarInsightsForward } from "@/lib/forward-insights";
+import { sumarMeses } from "@/lib/time";
 import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
@@ -22,7 +27,6 @@ import {
   revparDe,
   seriePnL,
   mixCanales,
-  pacing,
   estadoDatos,
   noiTTM,
   statsReservas,
@@ -85,7 +89,13 @@ export default async function UnidadPage({
   const priorMeses = desplazarMeses(periodMeses, -12);
   const prevMes = mesPrevio(mes);
   const mesesTTM = ttm(mes);
-  const todos = Array.from(new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes]));
+  // Proximos 6 meses (relativos a hoy, no al mes seleccionado).
+  const mesesForward = Array.from({ length: 6 }, (_, i) =>
+    sumarMeses(mesPorDefecto(), i + 1),
+  );
+  const todos = Array.from(
+    new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes, ...mesesForward]),
+  );
   const map = await unidadMesMap([u], todos);
 
   const de = (meses: string[]): UnidadMes[] =>
@@ -106,10 +116,10 @@ export default async function UnidadPage({
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, pac, stats, reservas, costes, revResumen, revNo5, cleanCost, opexCats] =
+  const [mix, fwd, stats, reservas, costes, revResumen, revNo5, cleanCost, opexCats] =
     await Promise.all([
       mixCanales(periodMeses, u.listingId),
-      pacing(u.listingId),
+      forwardKpis([u.listingId]),
       statsReservas(periodMeses, u.listingId),
       reservasDelMes(u.listingId, mes),
       costesDetalle(u.nickname, mes),
@@ -118,6 +128,22 @@ export default async function UnidadPage({
       costesLimpieza(periodMeses, u.nickname),
       costesPorCategoria(periodMeses, u.nickname),
     ]);
+
+  // Vision futura de la unidad: ventanas OTB y consejos de revenue.
+  const fwdVentanas = fwd.porUnidad.get(u.listingId) ?? [];
+  const insightsFwd = generarInsightsForward(fwdVentanas, []);
+  const mesesFwdFilas: MesForward[] = mesesForward.map((m) => {
+    const r = sumar(de([m]));
+    return {
+      mes: m,
+      noches: r.vendidas,
+      disponibles: r.disponibles,
+      occ: ocupacionDe(r),
+      adr: adrDe(r),
+      revpar: revparDe(r),
+      revenue: r.alojamiento,
+    };
+  });
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
   const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
@@ -198,8 +224,21 @@ export default async function UnidadPage({
         </div>
 
         <Card>
-          <SectionTitle>Pacing</SectionTitle>
-          <PacingStrip pacing={pac} />
+          <SectionTitle>Vision futura · proximos 15/30/60/90 dias (on the books)</SectionTitle>
+          <ForwardOutlook ventanas={fwdVentanas} />
+          {insightsFwd.length > 0 && (
+            <div className="mt-4">
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
+                Consejos de revenue
+              </h3>
+              <Insights insights={insightsFwd} />
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <SectionTitle>Proximos 6 meses (on the books)</SectionTitle>
+          <ForwardMeses filas={mesesFwdFilas} />
         </Card>
 
         <Card>
