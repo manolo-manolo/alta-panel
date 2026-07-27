@@ -12,7 +12,6 @@ import {
   mesActualMadrid,
   meses12,
   mesesYTD,
-  sumarDias,
   sumarMeses,
 } from "@/lib/time";
 
@@ -449,48 +448,6 @@ export async function mixCanales(
     cur.noches += Number(r.noches);
   }
   return [...base.values()];
-}
-
-// --- Pacing (proximos 30/60/90 dias vs mismo punto del ano anterior) ---
-export interface PacingVentana {
-  dias: number;
-  noches: number;
-  revenue: number;
-  nochesLY: number;
-  revenueLY: number;
-}
-
-async function ventanaNoches(
-  desde: string,
-  hasta: string,
-  listingId?: string,
-): Promise<{ noches: number; revenue: number }> {
-  const row = await queryOne<{ noches: string; revenue: number }>(
-    `SELECT COUNT(*) AS noches, COALESCE(SUM(accommodation_eur),0) AS revenue
-     FROM reservation_nights
-     WHERE night >= $1 AND night < $2 ${listingId ? "AND listing_id = $3" : ""}`,
-    listingId ? [desde, hasta, listingId] : [desde, hasta],
-  );
-  return { noches: Number(row?.noches ?? 0), revenue: row?.revenue ?? 0 };
-}
-
-export async function pacing(listingId?: string): Promise<PacingVentana[]> {
-  const hoy = hoyMadrid();
-  const hoyLY = sumarDias(hoy, -365);
-  const ventanas = [30, 60, 90];
-  const out: PacingVentana[] = [];
-  for (const dias of ventanas) {
-    const actual = await ventanaNoches(hoy, sumarDias(hoy, dias), listingId);
-    const ly = await ventanaNoches(hoyLY, sumarDias(hoyLY, dias), listingId);
-    out.push({
-      dias,
-      noches: actual.noches,
-      revenue: actual.revenue,
-      nochesLY: ly.noches,
-      revenueLY: ly.revenue,
-    });
-  }
-  return out;
 }
 
 // --- Lead time y estancia media (reservas con check-in en el mes) ---

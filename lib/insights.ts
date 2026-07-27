@@ -19,8 +19,6 @@ export interface InsightInput {
   }[];
   limpiezaNeto: number;
   limpiezaMargen: number | null;
-  pacing30Noches: number;
-  pacing30NochesLY: number;
   mixAirbnbPct: number | null;
   ratingMedio: number | null;
 }
@@ -66,13 +64,6 @@ export function generarInsights(i: InsightInput): Insight[] {
       tono: "bueno",
       texto: `NOI yield en banda objetivo (>=9%): ${propBuena.map((p) => `${p.nombre} (${pct1(p.rendimiento! / 100)})`).join(", ")}.`,
     });
-  }
-
-  // Pacing 30 dias
-  if (i.pacing30NochesLY > 0) {
-    const v = (i.pacing30Noches - i.pacing30NochesLY) / i.pacing30NochesLY;
-    if (v <= -0.1) alertas.push({ tono: "alerta", texto: `Cartera a 30 dias por debajo del ano pasado (${pct1(v)} noches). Considera ajustar precios o promociones.` });
-    else if (v >= 0.1) buenas.push({ tono: "bueno", texto: `Cartera a 30 dias por encima del ano pasado (${pct1(v)} noches).` });
   }
 
   // Dependencia de canal
