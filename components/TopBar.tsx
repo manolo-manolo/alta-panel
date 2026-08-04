@@ -154,6 +154,13 @@ export default function TopBar({
           </button>
 
           <a
+            href={`/costes?mes=${mes}&periodo=${periodo}`}
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
+          >
+            Costes
+          </a>
+
+          <a
             href="/opex"
             className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
           >
