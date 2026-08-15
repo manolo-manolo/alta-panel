@@ -54,12 +54,14 @@ export function KpiCard({
   deltaMoM,
   deltaYoY,
   sub,
+  etiquetaMoM = "vs mes ant.",
 }: {
   label: string;
   value: string;
   deltaMoM?: number | null;
   deltaYoY?: number | null;
   sub?: string;
+  etiquetaMoM?: string;
 }) {
   return (
     <Card className="flex flex-col gap-1">
@@ -71,7 +73,7 @@ export function KpiCard({
       {(deltaMoM !== undefined || deltaYoY !== undefined) && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
           {deltaMoM !== undefined && (
-            <DeltaBadge fraccion={deltaMoM ?? null} etiqueta="vs mes ant." />
+            <DeltaBadge fraccion={deltaMoM ?? null} etiqueta={etiquetaMoM} />
           )}
           {deltaYoY !== undefined && (
             <DeltaBadge fraccion={deltaYoY ?? null} etiqueta="vs ano ant." />
