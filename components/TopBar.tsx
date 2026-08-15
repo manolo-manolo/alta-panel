@@ -161,6 +161,13 @@ export default function TopBar({
           </a>
 
           <a
+            href="/web"
+            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
+          >
+            Web
+          </a>
+
+          <a
             href="/opex"
             className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
           >
