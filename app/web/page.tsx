@@ -329,10 +329,10 @@ function GuiaConexion() {
         </p>
         <ol className="ml-4 list-decimal space-y-1 text-muted">
           <li>
-            Comprueba que la web de reservas tiene GA4 instalado: abre el codigo fuente y busca
-            &quot;gtag&quot; o &quot;G-&quot;. Si no lo tiene, crea una propiedad en
-            analytics.google.com e instala la etiqueta (o activa la integracion de Google
-            Analytics en el editor de tu web).
+            Comprueba que altahomes.es tiene GA4 instalado: abre la web, clic derecho, &quot;Ver
+            codigo fuente&quot; y busca &quot;gtag&quot; o &quot;G-&quot;. Si no lo tiene, crea
+            una propiedad en analytics.google.com e instala la etiqueta (o activa la integracion
+            de Google Analytics en el editor de la web).
           </li>
           <li>
             En console.cloud.google.com crea una service account, genera una clave JSON y activa
@@ -340,12 +340,14 @@ function GuiaConexion() {
           </li>
           <li>
             Anade el email de esa service account como lector en la propiedad de GA4 (Admin,
-            Access Management) y en Search Console (Ajustes, Usuarios y permisos).
+            Access Management) y en Search Console (Ajustes, Usuarios y permisos) de
+            altahomes.es.
           </li>
           <li>
             En Vercel anade las variables: GOOGLE_SERVICE_ACCOUNT_EMAIL,
             GOOGLE_SERVICE_ACCOUNT_KEY (la private_key del JSON), GA4_PROPERTY_ID (numero de la
-            propiedad) y GSC_SITE_URL (p. ej. sc-domain:tudominio.com).
+            propiedad) y GSC_SITE_URL (sc-domain:altahomes.es si la propiedad es de dominio, o
+            https://www.altahomes.es/ si es de prefijo de URL).
           </li>
         </ol>
         <p className="text-xs text-faint">
