@@ -8,7 +8,8 @@ async function main() {
   const sig = createHmac("sha256", secret).update(payload).digest("base64url");
   const token = `${payload}.${sig}`;
 
-  const csv = readFileSync("C:\\Users\\Manolo Moreno\\Downloads\\Opex Pisos.csv", "utf8");
+  const ruta = process.argv[3] || "C:\\Users\\Manolo Moreno\\Downloads\\Opex Pisos.csv";
+  const csv = readFileSync(ruta, "utf8");
   const port = process.argv[2] || "3000";
   const res = await fetch(`http://localhost:${port}/api/opex/upload`, {
     method: "POST",

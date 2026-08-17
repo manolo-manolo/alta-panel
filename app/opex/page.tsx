@@ -33,12 +33,12 @@ export default async function OpexPage() {
         <Card>
           <SectionTitle>Subir Opex actualizado</SectionTitle>
           <p className="mb-4 text-sm text-muted">
-            Sube el CSV con la tabla de gastos (el mismo formato de siempre:
-            unidades por bloques, categorias en filas y un mes por columna).
-            El panel detecta los meses automaticamente, mapea las categorias,
-            excluye comisiones de canal y capex, reparte General por coste y
-            regenera las estimaciones de los meses sin datos. Reemplaza la carga
-            anterior por completo.
+            Sube el archivo de gastos (CSV o texto separado por tabuladores).
+            El panel detecta el formato automaticamente: el Excel historico por
+            bloques o el formato mensual (Unidad, Categoria y un mes por
+            columna). Mapea las categorias, excluye comisiones de canal y capex,
+            y regenera las estimaciones de los meses sin datos. Cada formato
+            reemplaza solo su propia carga anterior.
           </p>
           <OpexUpload />
         </Card>

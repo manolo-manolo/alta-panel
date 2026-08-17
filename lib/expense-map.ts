@@ -37,11 +37,14 @@ const COMISION: string[] = [
 const CAPEX: string[] = [
   "amortizacion", "montaje", "reforma", "notaria", "registro",
   "retirada muebles", "extraordinari", "okupas", "certificado de dominio",
-  "gastos montaje",
+  "gastos montaje", "puesta a punto",
 ];
 
 // concepto normalizado (incluye) -> categoria
 const MAPEO: [string, Categoria][] = [
+  // Antes de "alquiler" generico: alquileres de menaje son "otros".
+  ["alquiler trona", "otros"],
+  ["alquiler cuna", "otros"],
   ["renta mensual", "alquiler"],
   ["alquiler", "alquiler"],
   ["comunidad", "comunidad"],
@@ -56,7 +59,7 @@ const MAPEO: [string, Categoria][] = [
   ["reparacion", "mantenimiento"],
   ["ferreteria", "mantenimiento"],
   ["energia electrica", "suministros"],
-  ["electrica", "suministros"],
+  ["electric", "suministros"],
   ["agua", "suministros"],
   ["wifi", "suministros"],
   ["internet", "suministros"],
@@ -65,13 +68,16 @@ const MAPEO: [string, Categoria][] = [
   ["hostai", "gestion"],
   ["chekin", "gestion"],
   ["nuki", "gestion"],
+  ["minut", "gestion"],
   ["smart hosting", "gestion"],
   ["home sensor", "gestion"],
+  ["servicios profesionales", "gestion"],
   ["gestion", "gestion"],
   ["gestoria", "gestion"],
   ["marketing", "marketing"],
   ["fotografia", "marketing"],
   ["amenities", "otros"],
+  ["regalos", "otros"],
   ["reposicion", "otros"],
   ["trona", "otros"],
   ["cuna", "otros"],
@@ -83,12 +89,19 @@ const MAPEO: [string, Categoria][] = [
   ["otros", "otros"],
 ];
 
+// Coincidencias exactas (conceptos demasiado cortos para buscar por "incluye").
+const EXACTAS: Record<string, Categoria> = {
+  bot: "gestion",
+};
+
 export function mapCategoria(raw: string): MapeoCategoria {
   const n = norm(raw);
   if (n === "") return { categoria: null, excluir: null };
 
   // Ya es una de nuestras categorias canonicas
   if (CANON.has(n)) return { categoria: n as Categoria, excluir: null };
+
+  if (EXACTAS[n]) return { categoria: EXACTAS[n], excluir: null };
 
   if (COMISION.some((k) => n.includes(k))) return { categoria: null, excluir: "comision" };
   if (CAPEX.some((k) => n.includes(k))) return { categoria: null, excluir: "capex" };
