@@ -356,74 +356,80 @@ async function estimar(client: PoolClient, mesActual: string): Promise<number> {
 }
 
 /**
- * Completa Ibarra 2 (renta = Ibarra + 80 EUR/mes):
- * - Meses CON datos reales propios: solo se anade la renta si falta en el
- *   archivo (Inmaculada no registra el alquiler de Ibarra 2).
- * - Meses SIN datos reales: se replica el perfil completo de Ibarra + 80.
+ * Ibarra 2 es un contrato de revenue share, no una renta fija:
+ *   base = ingreso de alojamiento (sin limpieza) - comision OTA atribuible
+ *   pago al propietario = 75% de la base (AltaHomes retiene el 25%).
+ * Ese pago se registra cada mes como coste de "alquiler" (variable), calculado
+ * sobre el ingreso real de la unidad. La limpieza (ingreso y coste) y el resto
+ * de opex quedan integros en nuestro P&L.
+ * Para meses antiguos sin costes propios se replica ademas el perfil operativo
+ * de Ibarra (sin alquiler) como estimacion.
  */
+const IBARRA2_OWNER_SHARE = 0.75;
+
 async function ibarra2(client: PoolClient): Promise<number> {
   const idr = await client.query<{ id: string }>("SELECT id FROM listings WHERE nickname = 'Ibarra 2'");
   if (!idr.rows[0]) return 0;
   const id = idr.rows[0].id;
-  const mesesR = await client.query<{ mes: string }>("SELECT DISTINCT mes FROM reservation_nights WHERE listing_id = $1", [id]);
 
-  const realesR = await client.query<{ mes: string; tiene_alquiler: boolean }>(
-    `SELECT mes, bool_or(categoria = 'alquiler') AS tiene_alquiler
-     FROM cost_rows WHERE unidad = 'Ibarra 2' AND origen = ANY($1) GROUP BY mes`,
+  // Ingresos reales por mes desde las noches sincronizadas de Guesty.
+  const revR = await client.query<{ mes: string; alo: number; limp: number; com: number }>(
+    `SELECT mes,
+            COALESCE(SUM(accommodation_eur),0)::float AS alo,
+            COALESCE(SUM(cleaning_eur),0)::float AS limp,
+            COALESCE(SUM(commission_eur),0)::float AS com
+     FROM reservation_nights WHERE listing_id = $1 GROUP BY mes`,
+    [id],
+  );
+
+  const realesR = await client.query<{ mes: string }>(
+    `SELECT DISTINCT mes FROM cost_rows WHERE unidad = 'Ibarra 2' AND origen = ANY($1)`,
     [REAL_ORIGENES],
   );
-  const reales = new Map(realesR.rows.map((r) => [r.mes, r.tiene_alquiler]));
-
-  // Renta de Ibarra por mes (real o estimada) y ultima renta real conocida.
-  const rentaIbarraR = await client.query<{ mes: string; r: number }>(
-    `SELECT mes, SUM(importe_eur)::float AS r FROM cost_rows
-     WHERE unidad = 'Ibarra' AND categoria = 'alquiler' AND origen = ANY($1)
-     GROUP BY mes`,
-    [[...REAL_ORIGENES, "estimado"]],
-  );
-  const rentaIbarra = new Map(rentaIbarraR.rows.map((r) => [r.mes, r.r]));
-  const ultimaRentaReal = await client.query<{ r: number }>(
-    `SELECT importe_eur AS r FROM cost_rows
-     WHERE unidad='Ibarra' AND categoria='alquiler' AND origen = ANY($1)
-     ORDER BY mes DESC LIMIT 1`,
-    [REAL_ORIGENES],
-  );
-  const rentaBase = ultimaRentaReal.rows[0]?.r ?? 1962;
+  const mesesReales = new Set(realesR.rows.map((r) => r.mes));
+  const primeraReal = [...mesesReales].sort()[0] ?? null;
 
   let filas = 0;
   const nuevas: { mes: string; unidad: string; categoria: string; concepto: string; importe: number; estimado: boolean; origen: string }[] = [];
 
-  for (const { mes } of mesesR.rows) {
-    const esReal = reales.has(mes);
-    if (esReal) {
-      if (!reales.get(mes)) {
-        const renta = (rentaIbarra.get(mes) ?? rentaBase) + 80;
-        nuevas.push({ mes, unidad: "Ibarra 2", categoria: "alquiler", concepto: "Alquiler vivienda (Ibarra +80)", importe: renta, estimado: true, origen: "ibarra2" });
-        filas++;
-      }
-      continue;
-    }
-    // Mes sin datos propios: perfil completo de Ibarra + suplemento.
-    const src = await client.query<{ categoria: string; concepto: string | null; importe_eur: number }>(
-      `SELECT categoria, concepto, importe_eur FROM cost_rows
-       WHERE unidad = 'Ibarra' AND mes = $1 AND origen = ANY($2)`,
-      [mes, [...REAL_ORIGENES, "estimado"]],
-    );
-    for (const r of src.rows) {
-      nuevas.push({ mes, unidad: "Ibarra 2", categoria: r.categoria, concepto: r.concepto ?? r.categoria, importe: r.importe_eur, estimado: true, origen: "ibarra2" });
+  for (const { mes, alo, limp, com } of revR.rows) {
+    // Comision atribuible al alojamiento (la parte de la limpieza se excluye).
+    const comAlo = alo + limp > 0 ? (com * alo) / (alo + limp) : com;
+    const base = alo - comAlo;
+    const payout = IBARRA2_OWNER_SHARE * base;
+    if (Math.abs(payout) >= 0.5) {
+      // Contractual y deterministico sobre ingresos reales: no es estimacion.
+      nuevas.push({
+        mes, unidad: "Ibarra 2", categoria: "alquiler",
+        concepto: "Pago propietario (75% de alojamiento neto de comision)",
+        importe: payout, estimado: false, origen: "ibarra2",
+      });
       filas++;
     }
-    nuevas.push({ mes, unidad: "Ibarra 2", categoria: "alquiler", concepto: "Suplemento renta (+80)", importe: 80, estimado: true, origen: "ibarra2" });
-    filas++;
+
+    // Meses antiguos sin costes propios: replicar el opex de Ibarra (sin
+    // alquiler) como aproximacion del coste operativo.
+    const anteriorAlPrimerReal = primeraReal === null || mes < primeraReal;
+    if (!mesesReales.has(mes) && anteriorAlPrimerReal) {
+      const src = await client.query<{ categoria: string; concepto: string | null; importe_eur: number }>(
+        `SELECT categoria, concepto, importe_eur FROM cost_rows
+         WHERE unidad = 'Ibarra' AND mes = $1 AND categoria <> 'alquiler' AND origen = ANY($2)`,
+        [mes, [...REAL_ORIGENES, "estimado"]],
+      );
+      for (const r of src.rows) {
+        nuevas.push({ mes, unidad: "Ibarra 2", categoria: r.categoria, concepto: r.concepto ?? r.categoria, importe: r.importe_eur, estimado: true, origen: "ibarra2" });
+        filas++;
+      }
+    }
   }
 
   await insertar(client, nuevas);
-  const renta = Math.round(rentaBase + 80);
+  // Revenue share: sin renta fija mensual.
   await client.query(
     `INSERT INTO unit_settings (listing_id, display_name, tipo, renta_mensual_eur, updated_at)
-     VALUES ($1, 'Ibarra 2', 'master_lease', $2, now())
-     ON CONFLICT (listing_id) DO UPDATE SET tipo='master_lease', renta_mensual_eur=EXCLUDED.renta_mensual_eur, updated_at=now()`,
-    [id, renta],
+     VALUES ($1, 'Ibarra 2', 'master_lease', NULL, now())
+     ON CONFLICT (listing_id) DO UPDATE SET tipo='master_lease', renta_mensual_eur=NULL, updated_at=now()`,
+    [id],
   );
   return filas;
 }
