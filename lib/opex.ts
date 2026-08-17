@@ -284,6 +284,25 @@ async function ibarra2(client: PoolClient): Promise<number> {
   return filas;
 }
 
+/**
+ * Regenera solo las estimaciones e Ibarra 2 (sin tocar los costes reales).
+ * Lo llama el sync nocturno para que los meses estimados avancen con el
+ * calendario y sigan la evolucion del ingreso de limpieza.
+ */
+export async function regenerarEstimaciones(mesActual: string): Promise<{
+  filasEstimadas: number;
+  ibarra2Filas: number;
+}> {
+  let filasEstimadas = 0;
+  let ibarra2Filas = 0;
+  await withTransaction(async (client) => {
+    await client.query("DELETE FROM cost_rows WHERE origen IN ('estimado','ibarra2')");
+    filasEstimadas = await estimar(client, mesActual);
+    ibarra2Filas = await ibarra2(client);
+  });
+  return { filasEstimadas, ibarra2Filas };
+}
+
 /** Pipeline completo de importacion. */
 export async function importarOpex(csvText: string, mesActual = MES_ACTUAL_FALLBACK): Promise<ResumenOpex> {
   const p = parseOpex(csvText);

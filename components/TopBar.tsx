@@ -10,6 +10,15 @@ interface UnidadOpt {
   nombre: string;
 }
 
+const NAV = [
+  { href: "/", label: "Panel" },
+  { href: "/pnl", label: "P&L" },
+  { href: "/costes", label: "Costes" },
+  { href: "/web", label: "Web" },
+  { href: "/opex", label: "Opex" },
+  { href: "/ajustes", label: "Ajustes" },
+];
+
 export default function TopBar({
   mes,
   periodo = "mes",
@@ -76,125 +85,116 @@ export default function TopBar({
     router.refresh();
   }
 
+  const esActiva = (href: string) =>
+    href === "/" ? pathname === "/" || pathname.startsWith("/unidad") : pathname.startsWith(href);
+
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-2">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M3 11.5 12 4l9 7.5" stroke="#0d7c74" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M5 10.5V20h14v-9.5" stroke="#0d7c74" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M10 20v-5h4v5" stroke="#0a5f59" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span className="text-base font-semibold tracking-tight text-ink">
-              Alta<span className="text-brand">Homes</span>
-            </span>
+    <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
+      {/* Fila 1: marca + navegacion + acciones */}
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 pt-2.5 pb-1.5">
+        <div className="flex min-w-0 items-center gap-5">
+          <a href="/" className="shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-black.png" alt="AltaHomes" className="h-5 w-auto" />
           </a>
-          {unidadId && (
-            <span className="rounded-md bg-canvas px-2 py-0.5 text-xs text-muted">
-              unidad
-            </span>
-          )}
+          <nav className="flex items-center gap-1 overflow-x-auto">
+            {NAV.map((n) => (
+              <a
+                key={n.href}
+                href={`${n.href}?mes=${mes}&periodo=${periodo}`}
+                className={`rounded-md px-2.5 py-1 text-sm whitespace-nowrap transition ${
+                  esActiva(n.href)
+                    ? "bg-brand/10 font-medium text-brand-ink"
+                    : "text-muted hover:bg-canvas hover:text-ink"
+                }`}
+              >
+                {n.label}
+              </a>
+            ))}
+          </nav>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Selector de mes */}
-          <div className="flex items-center gap-1 rounded-lg border border-line bg-surface">
-            <button
-              onClick={() => cambiarMes(sumarMeses(mes, -1))}
-              className="px-2 py-1.5 text-muted hover:text-ink"
-              aria-label="Mes anterior"
-            >
-              ‹
-            </button>
-            <span className="min-w-28 text-center text-sm font-medium capitalize">
-              {mesLabel(mes)}
-            </span>
-            <button
-              onClick={() => cambiarMes(sumarMeses(mes, 1))}
-              className="px-2 py-1.5 text-muted hover:text-ink"
-              aria-label="Mes siguiente"
-            >
-              ›
-            </button>
-          </div>
-
-          {/* Selector de periodo */}
-          <select
-            value={periodo}
-            onChange={(e) => cambiarPeriodo(e.target.value)}
-            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brand"
-          >
-            <option value="mes">Mes</option>
-            <option value="ytd">YTD</option>
-            <option value="ttm">TTM</option>
-            <option value="ano">Ano</option>
-          </select>
-
-          {/* Selector de unidad */}
-          <select
-            value={unidadId ?? ""}
-            onChange={(e) => cambiarUnidad(e.target.value)}
-            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brand"
-          >
-            <option value="">Todo el portfolio</option>
-            {unidades.map((u) => (
-              <option key={u.listingId} value={u.listingId}>
-                {u.nombre}
-              </option>
-            ))}
-          </select>
-
+        <div className="flex shrink-0 items-center gap-1.5">
           <button
             onClick={refrescar}
             disabled={refrescando || pending}
             className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand disabled:opacity-50"
           >
-            {refrescando ? "Actualizando..." : "Actualizar datos"}
+            {refrescando ? "Actualizando..." : "Actualizar"}
           </button>
-
-          <a
-            href={`/costes?mes=${mes}&periodo=${periodo}`}
-            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
-          >
-            Costes
-          </a>
-
-          <a
-            href="/web"
-            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
-          >
-            Web
-          </a>
-
-          <a
-            href="/opex"
-            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
-          >
-            Opex
-          </a>
-
-          <a
-            href="/ajustes"
-            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
-          >
-            Ajustes
-          </a>
-
           <button
             onClick={salir}
-            className="rounded-lg px-2 py-1.5 text-sm text-muted hover:text-ink"
+            className="rounded-lg px-2 py-1.5 text-sm text-faint hover:text-ink"
+            title="Cerrar sesion"
           >
             Salir
           </button>
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 pb-2 text-xs text-faint">
-        <span>
-          Datos actualizados: {ultimaActualizacion ? fechaHora(ultimaActualizacion) : "sin datos"}
+      {/* Fila 2: controles de contexto */}
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-2">
+        <div className="flex items-center rounded-lg border border-line bg-surface">
+          <button
+            onClick={() => cambiarMes(sumarMeses(mes, -1))}
+            className="px-2.5 py-1 text-muted hover:text-ink"
+            aria-label="Mes anterior"
+          >
+            ‹
+          </button>
+          <span className="min-w-28 text-center text-sm font-medium capitalize">
+            {mesLabel(mes)}
+          </span>
+          <button
+            onClick={() => cambiarMes(sumarMeses(mes, 1))}
+            className="px-2.5 py-1 text-muted hover:text-ink"
+            aria-label="Mes siguiente"
+          >
+            ›
+          </button>
+        </div>
+
+        <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
+          {[
+            { v: "mes", l: "Mes" },
+            { v: "ytd", l: "YTD" },
+            { v: "ttm", l: "TTM" },
+            { v: "ano", l: "Ano" },
+          ].map((p) => (
+            <button
+              key={p.v}
+              onClick={() => cambiarPeriodo(p.v)}
+              className={`rounded-md px-2.5 py-0.5 text-xs font-medium transition ${
+                periodo === p.v
+                  ? "bg-brand text-white"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              {p.l}
+            </button>
+          ))}
+        </div>
+
+        <select
+          value={unidadId ?? ""}
+          onChange={(e) => cambiarUnidad(e.target.value)}
+          className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus:border-brand"
+        >
+          <option value="">Todo el portfolio</option>
+          {unidades.map((u) => (
+            <option key={u.listingId} value={u.listingId}>
+              {u.nombre}
+            </option>
+          ))}
+        </select>
+
+        <span className="ml-auto text-xs text-faint">
+          {aviso ? (
+            <span className="text-brand">{aviso}</span>
+          ) : (
+            <>Datos: {ultimaActualizacion ? fechaHora(ultimaActualizacion) : "sin sincronizar"}</>
+          )}
         </span>
-        {aviso && <span className="text-brand">{aviso}</span>}
       </div>
     </header>
   );

@@ -421,6 +421,14 @@ export async function runSync(opts: {
       }
     }
 
+    // 5) Avanzar las estimaciones de costes al mes actual (no debe abortar).
+    try {
+      const { regenerarEstimaciones } = await import("@/lib/opex");
+      await regenerarEstimaciones(mesActual);
+    } catch {
+      // ignorar
+    }
+
     const finishedAt = new Date();
     const status: SyncResult["status"] = "ok";
     await registrarLog({

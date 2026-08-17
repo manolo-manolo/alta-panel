@@ -260,7 +260,7 @@ export default async function UnidadPage({
         </div>
         <Card>
           <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
-          <OpexDetalle categorias={opexCats} />
+          <OpexDetalle categorias={opexCats} ingresos={rAct.brutos} />
         </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

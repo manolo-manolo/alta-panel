@@ -16,7 +16,6 @@ import { sumarMeses } from "@/lib/time";
 import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
 import OpexDetalle from "@/components/OpexDetalle";
-import PnLUnitPicker from "@/components/PnLUnitPicker";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, delta } from "@/lib/format";
@@ -55,13 +54,12 @@ const PERIODOS = ["mes", "ytd", "ttm", "ano"];
 export default async function PortfolioPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; periodo?: string; pnl?: string }>;
+  searchParams: Promise<{ mes?: string; periodo?: string }>;
 }) {
   await requireSesion();
   const sp = await searchParams;
   const mes = sp.mes && /^\d{4}-\d{2}$/.test(sp.mes) ? sp.mes : mesPorDefecto();
   const periodo: Periodo = (PERIODOS.includes(sp.periodo ?? "") ? sp.periodo : "mes") as Periodo;
-  const pnlSel = sp.pnl ?? "";
 
   let estado;
   try {
@@ -147,10 +145,6 @@ export default async function PortfolioPage({
   const ttmTot = totalesChart(serie);
   const ttmPrevTot = totalesChart(seriePrior);
 
-  // Seleccion de unidad para el P&L (dropdown ?pnl=)
-  const unidadPnl = pnlSel ? unidades.find((u) => u.listingId === pnlSel) : undefined;
-  const seriePnlSel = unidadPnl ? seriePnL(map, [unidadPnl], mesesTTM) : serie;
-
   const { desde, hastaExcl } = rangoFechas(periodMeses);
   const [mix, fwd, stats, revResumen, revNo5, opexCats, cleanCostPortfolio] =
     await Promise.all([
@@ -159,7 +153,7 @@ export default async function PortfolioPage({
       statsReservas(periodMeses),
       resumenReviews(undefined, desde, hastaExcl),
       reviewsNo5(undefined, desde, hastaExcl),
-      costesPorCategoria(periodMeses, unidadPnl?.nickname),
+      costesPorCategoria(periodMeses),
       costesLimpieza(periodMeses),
     ]);
 
@@ -398,19 +392,19 @@ export default async function PortfolioPage({
         <UnitsTable filas={filas} mes={mes} total={total} />
       </Card>
 
-      <Card className="scroll-mt-24">
-        <div id="pnl" className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <Card>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-faint">
-            P&amp;L (ultimos 12 meses){unidadPnl ? ` · ${unidadPnl.displayName}` : " · portfolio"}
+            P&amp;L del portfolio (ultimos 12 meses)
           </h2>
-          <PnLUnitPicker
-            mes={mes}
-            periodo={periodo}
-            pnl={pnlSel}
-            unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-          />
+          <a
+            href={`/pnl?mes=${mes}&periodo=${periodo}`}
+            className="text-sm font-medium text-brand hover:text-brand-ink"
+          >
+            Ver P&amp;L por unidad →
+          </a>
         </div>
-        <PnLTable serie={seriePnlSel} />
+        <PnLTable serie={serie} />
       </Card>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -424,11 +418,8 @@ export default async function PortfolioPage({
       </div>
 
       <Card>
-        <SectionTitle>
-          Desglose de costes · {etiqueta}
-          {unidadPnl ? ` · ${unidadPnl.displayName}` : ""}
-        </SectionTitle>
-        <OpexDetalle categorias={opexCats} />
+        <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
+        <OpexDetalle categorias={opexCats} ingresos={rAct.brutos} />
       </Card>
     </Shell>
   );
