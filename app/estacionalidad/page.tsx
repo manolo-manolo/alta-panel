@@ -188,6 +188,7 @@ export default async function EstacionalidadPage({
             {sel && (
               <span className="ml-2 normal-case text-faint">
                 {sel.mesesConDatos} meses de datos reales
+                {sel.rampMes ? ` · ${sel.rampMes} excluido como rampa de apertura` : ""}
                 {sel.usaOTB ? " · nivel calibrado con reservas en cartera" : ""}
               </span>
             )}
@@ -219,6 +220,11 @@ export default async function EstacionalidadPage({
               (otb) = mes proximo con reservas ya en cartera: se muestra su ADR
               contratado y la ocupacion reservada actua como suelo. (est.) = nivel
               propio x indice del portfolio.
+            </li>
+            <li>
+              El primer mes de operacion de cada unidad se excluye como rampa de
+              apertura (dias bloqueados por puesta a punto, sin reviews): no entra
+              ni en su calibrado ni en los indices del portfolio.
             </li>
             <li>
               Para underwriting de una unidad nueva: aplica los indices a tu ADR y

@@ -52,6 +52,7 @@ export interface UnidadEstacionalidad {
   nombre: string;
   mesesConDatos: number;
   primerMes: string | null;
+  rampMes: string | null; // primer mes de operacion excluido como rampa
   usaOTB: boolean;
   meses: MesStat[];
   ano: AnoStat;
@@ -172,12 +173,33 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
     return e;
   };
 
+  // Rampa de apertura: el PRIMER mes de operacion de una unidad (dias
+  // bloqueados por puesta a punto, sin reviews, ranking frio) no es
+  // representativo y se excluye del calibrado y de los indices. Solo aplica a
+  // aperturas reales dentro de la ventana de datos, no al corte de la ventana.
+  const cerradas = ventas.filter((v) => v.mes <= cierre);
+  const ventanaMin = cerradas.reduce(
+    (min, v) => (min === null || v.mes < min ? v.mes : min),
+    null as string | null,
+  );
+  const primerMesUnidad = new Map<string, string>();
+  for (const v of cerradas) {
+    const cur = primerMesUnidad.get(v.unidad);
+    if (!cur || v.mes < cur) primerMesUnidad.set(v.unidad, v.mes);
+  }
+  const rampMes = new Map<string, string>();
+  for (const [u, primero] of primerMesUnidad) {
+    if (ventanaMin !== null && primero > ventanaMin) rampMes.set(u, primero);
+  }
+
   for (const v of ventas) {
     const cal = Number(v.mes.slice(5, 7)) - 1;
     const disp = dispMap.get(`${v.unidad}|${v.mes}`) ?? 0;
     const e = asegurar(v.unidad);
 
     if (v.mes <= cierre) {
+      if (!e.primerMes || v.mes < e.primerMes) e.primerMes = v.mes;
+      if (rampMes.get(v.unidad) === v.mes) continue; // mes de rampa excluido
       const c = e.celdas[cal];
       c.noches += Number(v.noches);
       c.disp += disp;
@@ -185,7 +207,6 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
       c.limp += v.limp;
       c.nObs += 1;
       e.mesesCerrados += 1;
-      if (!e.primerMes || v.mes < e.primerMes) e.primerMes = v.mes;
 
       const p = portfolioCeldas[cal];
       p.noches += Number(v.noches);
@@ -241,6 +262,7 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
     nombre: "Portfolio",
     mesesConDatos: portfolioCeldas.reduce((a, c) => a + c.nObs, 0),
     primerMes: null,
+    rampMes: null,
     usaOTB: false,
     meses: portfolioMeses,
     ano: anoDesdeMeses(portfolioMeses),
@@ -327,6 +349,7 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
       nombre,
       mesesConDatos: e.mesesCerrados,
       primerMes: e.primerMes,
+      rampMes: rampMes.get(nombre) ?? null,
       usaOTB,
       meses,
       ano: anoDesdeMeses(meses),
