@@ -13,6 +13,7 @@ interface UnidadOpt {
 const NAV = [
   { href: "/", label: "Panel" },
   { href: "/pnl", label: "P&L" },
+  { href: "/estacionalidad", label: "Estacionalidad" },
   { href: "/costes", label: "Costes" },
   { href: "/web", label: "Web" },
   { href: "/opex", label: "Opex" },
