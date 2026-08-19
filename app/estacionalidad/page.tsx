@@ -55,15 +55,21 @@ function TablaEstacionalidad({
             <tr key={m.calMes} className="border-b border-line/60">
               <td className="px-2 py-1.5 text-left text-ink">
                 {MESES_L[m.calMes - 1]}
-                {m.estimado && (
+                {m.fuente === "otb" && (
+                  <span
+                    className="ml-1 text-xs text-ok"
+                    title="Reservas ya en cartera: precio contratado y ocupacion reservada como suelo"
+                  >
+                    (otb)
+                  </span>
+                )}
+                {m.fuente === "estimado" && m.estimado && (
                   <span className="ml-1 text-xs text-brand" title="Estimado por nivel x indice">
                     (est.)
                   </span>
                 )}
-                {!m.estimado && m.nObs > 0 && !esPortfolio && (
-                  <span className="ml-1 text-xs text-faint">
-                    ({m.nObs} {m.nObs === 1 ? "obs" : "obs"})
-                  </span>
+                {m.fuente === "real" && m.nObs > 0 && !esPortfolio && (
+                  <span className="ml-1 text-xs text-faint">({m.nObs} obs)</span>
                 )}
               </td>
               <td className="px-2 py-1.5 text-right">{pct(m.occ)}</td>
@@ -203,9 +209,16 @@ export default async function EstacionalidadPage({
               medio.
             </li>
             <li>
-              Meses sin datos de una unidad: nivel propio desestacionalizado x indice
-              del portfolio, marcados (est.). Unidades sin meses cerrados calibran su
-              nivel de ADR con sus reservas en cartera.
+              El nivel de ADR de cada unidad se calibra con TODAS sus reservas reales,
+              incluidas las futuras en cartera (precios contratados). El nivel de
+              ocupacion propio se pondera con el del portfolio segun los meses
+              cerrados disponibles, para que un unico mes de apertura no condene la
+              proyeccion.
+            </li>
+            <li>
+              (otb) = mes proximo con reservas ya en cartera: se muestra su ADR
+              contratado y la ocupacion reservada actua como suelo. (est.) = nivel
+              propio x indice del portfolio.
             </li>
             <li>
               Para underwriting de una unidad nueva: aplica los indices a tu ADR y

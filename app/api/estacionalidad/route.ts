@@ -39,7 +39,7 @@ export async function GET() {
         [
           `"${u.nombre}"`, MESES_L[m.calMes - 1], n(m.occ, 4), n(m.adrSin), n(m.adrCon),
           n(m.revparSin), n(m.revparCon), n(idx?.idxAdr ?? null), n(idx?.idxOcc ?? null),
-          m.estimado ? "si" : "no", String(m.nObs),
+          m.fuente, String(m.nObs),
         ].join(","),
       );
     }

@@ -5,30 +5,38 @@ import { mesActualMadrid, sumarMeses } from "@/lib/time";
 /**
  * Estacionalidad y benchmarks para underwriting de nuevas unidades.
  *
- * Todo se CALCULA sobre meses cerrados (hasta el mes pasado incluido):
- * - ADR sin limpieza = ingreso de alojamiento / noches vendidas.
- * - ADR con limpieza = (alojamiento + limpieza) / noches vendidas.
- * - Ocupacion ajustada al inicio real de cada unidad.
- * - Indice de estacionalidad del mes M = valor del mes M / media global
- *   (ponderado por noches; portfolio completo).
+ * Base de calculo:
+ * - Meses CERRADOS (hasta el mes pasado): ADR sin limpieza = alojamiento /
+ *   noches vendidas; ADR con limpieza anade la limpieza; ocupacion ajustada al
+ *   inicio real de cada unidad.
+ * - Indice de estacionalidad del mes M = valor de M en el portfolio / media
+ *   global (ponderado por noches).
  *
- * Para unidades con pocos datos, los meses sin observacion se ESTIMAN:
- * nivel propio desestacionalizado x indice del portfolio de ese mes.
- * Esos valores van marcados como estimados.
+ * Para unidades con pocos datos la vista es REALISTA, no conservadora:
+ * - El nivel de ADR se calibra con TODAS las reservas reales, incluidas las
+ *   futuras en cartera (OTB): son precios contratados, no supuestos.
+ * - El nivel de ocupacion propio se pondera con el del portfolio segun cuantos
+ *   meses cerrados tenga la unidad (credibilidad n/(n+3)); un solo mes de
+ *   apertura no condena la proyeccion anual.
+ * - Si un mes calendario proximo ya tiene reservas en cartera relevantes, se
+ *   usan su ADR contratado y su ocupacion ya reservada como suelo.
  */
 
 const DIAS_MES = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 const OCC_MAX_EST = 0.97;
+const CREDIBILIDAD_K = 3; // meses cerrados necesarios para pesar 50/50 con el portfolio
+const OTB_MIN_NOCHES = 10; // minimo de noches en cartera para usar un mes OTB
 
 export interface MesStat {
   calMes: number; // 1..12
-  nObs: number; // meses reales observados (0 = estimado)
+  nObs: number; // meses cerrados observados (0 = proyectado)
   occ: number | null;
   adrSin: number | null;
   adrCon: number | null;
   revparSin: number | null;
   revparCon: number | null;
   estimado: boolean;
+  fuente: "real" | "otb" | "estimado";
 }
 
 export interface AnoStat {
@@ -44,7 +52,7 @@ export interface UnidadEstacionalidad {
   nombre: string;
   mesesConDatos: number;
   primerMes: string | null;
-  usaOTB: boolean; // el nivel se calibro con reservas futuras (unidad muy nueva)
+  usaOTB: boolean;
   meses: MesStat[];
   ano: AnoStat;
 }
@@ -92,13 +100,10 @@ function anoDesdeMeses(meses: MesStat[]): AnoStat {
   if (dias === 0 || noches === 0) {
     return { occ: null, adrSin: null, adrCon: null, revparSin: null, revparCon: null, algunEstimado };
   }
-  const occ = noches / dias;
-  const adrSin = ingSin / noches;
-  const adrCon = ingCon / noches;
   return {
-    occ,
-    adrSin,
-    adrCon,
+    occ: noches / dias,
+    adrSin: ingSin / noches,
+    adrCon: ingCon / noches,
     revparSin: ingSin / dias,
     revparCon: ingCon / dias,
     algunEstimado,
@@ -108,7 +113,7 @@ function anoDesdeMeses(meses: MesStat[]): AnoStat {
 export async function calcularEstacionalidad(): Promise<Estacionalidad> {
   const cierre = sumarMeses(mesActualMadrid(), -1);
 
-  // Noches vendidas y dinero por unidad y mes (cerrados).
+  // Noches vendidas y dinero por unidad y mes (TODOS los meses, tambien OTB).
   const ventas = await query<{
     unidad: string;
     mes: string;
@@ -123,12 +128,10 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
      FROM reservation_nights n
      JOIN listings l ON l.id = n.listing_id
      LEFT JOIN unit_settings s ON s.listing_id = l.id
-     WHERE n.mes <= $1
      GROUP BY unidad, n.mes`,
-    [cierre],
   );
 
-  // Disponibilidad ajustada al inicio real.
+  // Disponibilidad ajustada al inicio real (todos los meses sincronizados).
   const dispo = await query<{ unidad: string; mes: string; disp: string }>(
     `WITH starts AS (
        SELECT l.id AS listing_id,
@@ -142,33 +145,28 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
      JOIN listings l ON l.id = a.listing_id
      LEFT JOIN unit_settings s ON s.listing_id = l.id
      JOIN starts st ON st.listing_id = a.listing_id
-     WHERE a.mes <= $1 AND st.inicio IS NOT NULL AND a.date >= st.inicio
+     WHERE st.inicio IS NOT NULL AND a.date >= st.inicio
      GROUP BY unidad, a.mes`,
-    [cierre],
   );
   const dispMap = new Map<string, number>();
   for (const d of dispo) dispMap.set(`${d.unidad}|${d.mes}`, Number(d.disp));
 
-  // OTB (todas las noches, tambien futuras) para calibrar unidades sin meses cerrados.
-  const otb = await query<{ unidad: string; noches: string; alo: number; limp: number }>(
-    `SELECT COALESCE(s.display_name, l.nickname) AS unidad,
-            COUNT(*) AS noches,
-            SUM(n.accommodation_eur)::float AS alo,
-            SUM(n.cleaning_eur)::float AS limp
-     FROM reservation_nights n
-     JOIN listings l ON l.id = n.listing_id
-     LEFT JOIN unit_settings s ON s.listing_id = l.id
-     GROUP BY unidad`,
-  );
-
-  // Estructuras por unidad y por mes calendario.
-  const porUnidad = new Map<string, { celdas: Celda[]; primerMes: string | null }>();
+  // Separar cerrado vs OTB por unidad.
+  const porUnidad = new Map<
+    string,
+    {
+      celdas: Celda[]; // cerrado, por mes calendario
+      otb: Map<number, { noches: number; alo: number; limp: number; disp: number }>; // calMes -> datos futuros
+      primerMes: string | null;
+      mesesCerrados: number;
+    }
+  >();
   const portfolioCeldas: Celda[] = Array.from({ length: 12 }, celdaVacia);
 
   const asegurar = (u: string) => {
     let e = porUnidad.get(u);
     if (!e) {
-      e = { celdas: Array.from({ length: 12 }, celdaVacia), primerMes: null };
+      e = { celdas: Array.from({ length: 12 }, celdaVacia), otb: new Map(), primerMes: null, mesesCerrados: 0 };
       porUnidad.set(u, e);
     }
     return e;
@@ -178,23 +176,35 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
     const cal = Number(v.mes.slice(5, 7)) - 1;
     const disp = dispMap.get(`${v.unidad}|${v.mes}`) ?? 0;
     const e = asegurar(v.unidad);
-    const c = e.celdas[cal];
-    c.noches += Number(v.noches);
-    c.disp += disp;
-    c.alo += v.alo;
-    c.limp += v.limp;
-    c.nObs += 1;
-    if (!e.primerMes || v.mes < e.primerMes) e.primerMes = v.mes;
 
-    const p = portfolioCeldas[cal];
-    p.noches += Number(v.noches);
-    p.disp += disp;
-    p.alo += v.alo;
-    p.limp += v.limp;
-    p.nObs += 1;
+    if (v.mes <= cierre) {
+      const c = e.celdas[cal];
+      c.noches += Number(v.noches);
+      c.disp += disp;
+      c.alo += v.alo;
+      c.limp += v.limp;
+      c.nObs += 1;
+      e.mesesCerrados += 1;
+      if (!e.primerMes || v.mes < e.primerMes) e.primerMes = v.mes;
+
+      const p = portfolioCeldas[cal];
+      p.noches += Number(v.noches);
+      p.disp += disp;
+      p.alo += v.alo;
+      p.limp += v.limp;
+      p.nObs += 1;
+    } else {
+      // Reservas en cartera para un mes futuro (o el actual, aun sin cerrar).
+      const o = e.otb.get(cal + 1) ?? { noches: 0, alo: 0, limp: 0, disp: 0 };
+      o.noches += Number(v.noches);
+      o.alo += v.alo;
+      o.limp += v.limp;
+      o.disp = Math.max(o.disp, disp);
+      e.otb.set(cal + 1, o);
+    }
   }
 
-  // Global e indices de portfolio.
+  // Global e indices de portfolio (solo meses cerrados).
   let totN = 0, totD = 0, totA = 0, totL = 0;
   for (const p of portfolioCeldas) {
     totN += p.noches; totD += p.disp; totA += p.alo; totL += p.limp;
@@ -212,18 +222,20 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
 
   const statDesdeCelda = (c: Celda, calMes: number): MesStat => {
     if (c.noches === 0 || c.disp === 0) {
-      return { calMes, nObs: c.nObs, occ: null, adrSin: null, adrCon: null, revparSin: null, revparCon: null, estimado: false };
+      return {
+        calMes, nObs: c.nObs, occ: null, adrSin: null, adrCon: null,
+        revparSin: null, revparCon: null, estimado: false, fuente: "estimado",
+      };
     }
     const adrSin = c.alo / c.noches;
     const adrCon = (c.alo + c.limp) / c.noches;
     const occ = Math.min(1, c.noches / c.disp);
     return {
       calMes, nObs: c.nObs, occ, adrSin, adrCon,
-      revparSin: adrSin * occ, revparCon: adrCon * occ, estimado: false,
+      revparSin: adrSin * occ, revparCon: adrCon * occ, estimado: false, fuente: "real",
     };
   };
 
-  // Portfolio (todos los meses tienen datos).
   const portfolioMeses = portfolioCeldas.map((c, i) => statDesdeCelda(c, i + 1));
   const portfolio: UnidadEstacionalidad = {
     nombre: "Portfolio",
@@ -234,20 +246,16 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
     ano: anoDesdeMeses(portfolioMeses),
   };
 
-  const otbMap = new Map(otb.map((o) => [o.unidad, o]));
-
-  // Unidades: reales + estimacion de huecos por nivel x indice.
   const unidades: UnidadEstacionalidad[] = [];
-  const nombres = [...new Set([...porUnidad.keys(), ...otbMap.keys()])].sort((a, b) =>
-    a.localeCompare(b, "es"),
-  );
+  const nombres = [...porUnidad.keys()].sort((a, b) => a.localeCompare(b, "es"));
 
   for (const nombre of nombres) {
-    const e = porUnidad.get(nombre) ?? { celdas: Array.from({ length: 12 }, celdaVacia), primerMes: null };
+    const e = porUnidad.get(nombre)!;
     const celdas = e.celdas;
 
-    // Nivel desestacionalizado de la unidad.
-    let nivAdrNum = 0, nivAdrDen = 0, nivOccNum = 0, nivOccDen = 0, uAlo = 0, uLimp = 0;
+    // --- Nivel de ADR: TODAS las reservas (cerradas + OTB), desestacionalizado ---
+    let nivAdrNum = 0, nivAdrDen = 0, uAlo = 0, uLimp = 0;
+    let usaOTB = false;
     for (let i = 0; i < 12; i++) {
       const c = celdas[i];
       const idx = indices[i];
@@ -256,48 +264,68 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
         nivAdrDen += c.noches * idx.idxAdr;
         uAlo += c.alo; uLimp += c.limp;
       }
+      const o = e.otb.get(i + 1);
+      if (o && o.noches > 0 && idx.idxAdr) {
+        nivAdrNum += o.alo;
+        nivAdrDen += o.noches * idx.idxAdr;
+        uAlo += o.alo; uLimp += o.limp;
+        usaOTB = true;
+      }
+    }
+    const nivelAdr = nivAdrDen > 0 ? nivAdrNum / nivAdrDen : adrGlobal;
+    const uplift = uAlo > 0 ? uLimp / uAlo : upliftGlobal;
+
+    // --- Nivel de ocupacion: propio (cerrado) ponderado con el portfolio ---
+    let nivOccNum = 0, nivOccDen = 0;
+    for (let i = 0; i < 12; i++) {
+      const c = celdas[i];
+      const idx = indices[i];
       if (c.disp > 0 && idx.idxOcc) {
         nivOccNum += c.noches;
         nivOccDen += c.disp * idx.idxOcc;
       }
     }
+    const nivelOccPropio = nivOccDen > 0 ? nivOccNum / nivOccDen : occGlobal;
+    const credibilidad = e.mesesCerrados / (e.mesesCerrados + CREDIBILIDAD_K);
+    const nivelOcc = credibilidad * nivelOccPropio + (1 - credibilidad) * occGlobal;
 
-    let usaOTB = false;
-    let nivelAdr = nivAdrDen > 0 ? nivAdrNum / nivAdrDen : null;
-    let uplift = uAlo > 0 ? uLimp / uAlo : upliftGlobal;
-    const nivelOcc = nivOccDen > 0 ? nivOccNum / nivOccDen : occGlobal;
-
-    // Unidad sin ningun mes cerrado: calibrar ADR con sus reservas OTB.
-    if (nivelAdr === null) {
-      const o = otbMap.get(nombre);
-      if (o && Number(o.noches) > 0) {
-        // Nivel bruto sin desestacionalizar (aprox.; se marca usaOTB).
-        nivelAdr = o.alo / Number(o.noches) / 1.0;
-        uplift = o.alo > 0 ? o.limp / o.alo : upliftGlobal;
-        usaOTB = true;
-      } else {
-        nivelAdr = adrGlobal;
-        usaOTB = true;
-      }
-    }
-
+    // --- Celdas mes a mes ---
     const meses: MesStat[] = celdas.map((c, i) => {
       const real = statDesdeCelda(c, i + 1);
       if (real.occ !== null) return real;
+
       const idx = indices[i];
-      if (!idx.idxAdr || !idx.idxOcc) return real; // sin indice no se estima
-      const adrSin = nivelAdr! * idx.idxAdr;
-      const occ = Math.min(OCC_MAX_EST, nivelOcc * idx.idxOcc);
-      const adrCon = adrSin * (1 + uplift);
+      if (!idx.idxAdr || !idx.idxOcc) return real;
+
+      const estAdr = nivelAdr * idx.idxAdr;
+      const estOcc = Math.min(OCC_MAX_EST, nivelOcc * idx.idxOcc);
+
+      // Mes proximo con reservas en cartera relevantes: precio contratado y
+      // ocupacion ya reservada como suelo.
+      const o = e.otb.get(i + 1);
+      if (o && o.noches >= OTB_MIN_NOCHES) {
+        const adrSin = o.alo / o.noches;
+        const occOtb = o.disp > 0 ? Math.min(1, o.noches / o.disp) : 0;
+        const occ = Math.min(OCC_MAX_EST, Math.max(estOcc, occOtb));
+        const adrCon = adrSin * (1 + (o.alo > 0 ? o.limp / o.alo : uplift));
+        return {
+          calMes: i + 1, nObs: 0, occ, adrSin, adrCon,
+          revparSin: adrSin * occ, revparCon: adrCon * occ,
+          estimado: true, fuente: "otb",
+        };
+      }
+
+      const adrCon = estAdr * (1 + uplift);
       return {
-        calMes: i + 1, nObs: 0, occ, adrSin, adrCon,
-        revparSin: adrSin * occ, revparCon: adrCon * occ, estimado: true,
+        calMes: i + 1, nObs: 0, occ: estOcc, adrSin: estAdr, adrCon,
+        revparSin: estAdr * estOcc, revparCon: adrCon * estOcc,
+        estimado: true, fuente: "estimado",
       };
     });
 
     unidades.push({
       nombre,
-      mesesConDatos: celdas.reduce((a, c) => a + c.nObs, 0),
+      mesesConDatos: e.mesesCerrados,
       primerMes: e.primerMes,
       usaOTB,
       meses,
