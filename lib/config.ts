@@ -69,6 +69,18 @@ export const CANAL_LABEL: Record<Canal, string> = {
   otros: "Otros",
 };
 
+// Supuestos de financiacion para el P&L de caja.
+// La deuda solo aplica a unidades con coste de adquisicion (propiedad):
+// prestamo = LTV x coste, amortizacion lineal (principal constante) y el
+// interes se devenga sobre el saldo vivo. El overhead corporativo se reparte
+// entre unidades por su cuota de ingresos netos del mes.
+export const FINANCIACION = {
+  ltv: 0.7,
+  anosAmortizacion: 15,
+  interesAnual: 0.035,
+  overheadAnualEur: 40_000,
+} as const;
+
 // Banda objetivo de NOI yield TTM (unidades en propiedad), en porcentaje.
 export const NOI_YIELD_VERDE = 9; // en banda o por encima
 export const NOI_YIELD_AMBAR = 7; // entre 7 y 9

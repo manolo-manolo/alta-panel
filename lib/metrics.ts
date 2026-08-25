@@ -28,6 +28,7 @@ export interface UnidadInfo {
   costeAdquisicion: number | null;
   rentaMensual: number | null;
   fechaInicio: string | null;
+  primeraNoche: string | null; // primera noche vendida (inicio de operacion real)
 }
 
 export interface UnidadMes {
@@ -82,13 +83,15 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
     coste: number | null;
     renta: number | null;
     fecha_inicio: string | null;
+    primera_noche: string | null;
   }>(
     `SELECT l.id, l.nickname, l.active,
             COALESCE(s.display_name, l.nickname)                              AS display_name,
             COALESCE(s.tipo, u.tipo)                                          AS tipo,
             COALESCE(s.coste_total_adquisicion_eur, u.coste_total_adquisicion_eur) AS coste,
             COALESCE(s.renta_mensual_eur, u.renta_mensual_eur)               AS renta,
-            COALESCE(s.fecha_inicio, u.fecha_inicio)                          AS fecha_inicio
+            COALESCE(s.fecha_inicio, u.fecha_inicio)                          AS fecha_inicio,
+            (SELECT MIN(n.night) FROM reservation_nights n WHERE n.listing_id = l.id) AS primera_noche
      FROM listings l
      LEFT JOIN units_meta u ON u.unidad = l.nickname
      LEFT JOIN unit_settings s ON s.listing_id = l.id
@@ -103,6 +106,7 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
     costeAdquisicion: r.coste,
     rentaMensual: r.renta,
     fechaInicio: r.fecha_inicio,
+    primeraNoche: r.primera_noche,
   }));
 }
 
