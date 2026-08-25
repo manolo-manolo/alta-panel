@@ -4,7 +4,10 @@ import Banner from "@/components/Banner";
 import { Card, SectionTitle, MiniStat } from "@/components/ui";
 import PnLTable from "@/components/PnLTable";
 import OpexDetalle from "@/components/OpexDetalle";
-import { eur, pct, mesLabel } from "@/lib/format";
+import Insights from "@/components/Insights";
+import type { Insight } from "@/lib/insights";
+import { seriePnLCash, type UnidadFinanciacion } from "@/lib/finance";
+import { eur, pct, pctDirecto, mesLabel } from "@/lib/format";
 import {
   getUnidades,
   unidadMesMap,
@@ -56,10 +59,77 @@ export default async function PnlPage({
   );
   const rPeriodo = sumar(itemsPeriodo);
 
-  const totalTTM = serie.reduce(
-    (a, m) => ({ ing: a.ing + m.brutos, noi: a.noi + m.noi }),
-    { ing: 0, noi: 0 },
+  // Hasta caja: deuda simulada (unidades con coste de adquisicion) y overhead
+  // repartido por cuota de ingresos netos del portfolio.
+  const seriePortfolio = sel ? seriePnL(map, unidades, mesesTTM) : serie;
+  const unidadesFin: UnidadFinanciacion[] = alcance.map((u) => ({
+    costeAdquisicion: u.costeAdquisicion,
+    inicio: u.fechaInicio ?? u.primeraNoche,
+  }));
+  const serieCash = seriePnLCash(serie, seriePortfolio, unidadesFin, unidades.length);
+
+  const totalTTM = serieCash.reduce(
+    (a, m) => ({
+      ing: a.ing + m.brutos,
+      noi: a.noi + m.noi,
+      overhead: a.overhead + m.overhead,
+      intereses: a.intereses + m.intereses,
+      principal: a.principal + m.principal,
+      caja: a.caja + m.caja,
+    }),
+    { ing: 0, noi: 0, overhead: 0, intereses: 0, principal: 0, caja: 0 },
   );
+  const servicioTTM = totalTTM.intereses + totalTTM.principal;
+  const dscrTTM = servicioTTM > 0 ? totalTTM.noi / servicioTTM : null;
+  const deudaViva = serieCash.length ? serieCash[serieCash.length - 1].saldoDeuda : 0;
+  const equity = alcance.reduce(
+    (s, u) => s + (u.costeAdquisicion && u.costeAdquisicion > 0 ? u.costeAdquisicion * 0.3 : 0),
+    0,
+  );
+  const cashOnCash = equity > 0 ? (totalTTM.caja / equity) * 100 : null;
+
+  // Lectura rapida del P&L de caja.
+  const consejosCaja: Insight[] = [];
+  if (dscrTTM !== null && dscrTTM < 1.2) {
+    consejosCaja.push({
+      tono: "alerta",
+      texto: `DSCR TTM de ${dscrTTM.toFixed(2)}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o mas). Sube NOI o alarga plazo antes de apalancar mas.`,
+    });
+  } else if (dscrTTM !== null && dscrTTM >= 1.5) {
+    consejosCaja.push({
+      tono: "bueno",
+      texto: `DSCR TTM de ${dscrTTM.toFixed(2)}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
+    });
+  }
+  if (totalTTM.caja < 0) {
+    consejosCaja.push({
+      tono: "alerta",
+      texto: `Caja neta TTM negativa (${eur(totalTTM.caja)}): tras overhead y deuda el negocio consume caja. Mira que linea pesa mas: overhead ${eur(totalTTM.overhead)}, intereses ${eur(totalTTM.intereses)}, principal ${eur(totalTTM.principal)}.`,
+    });
+  } else if (totalTTM.caja > 0 && totalTTM.ing > 0) {
+    consejosCaja.push({
+      tono: "bueno",
+      texto: `Generacion de caja TTM de ${eur(totalTTM.caja)} (${pct(totalTTM.caja / totalTTM.ing)} de los ingresos), ya descontados overhead, intereses y amortizacion. La amortizacion (${eur(totalTTM.principal)}) ademas construye patrimonio: no es gasto perdido.`,
+    });
+  }
+  if (totalTTM.noi > 0 && totalTTM.overhead / totalTTM.noi >= 0.35) {
+    consejosCaja.push({
+      tono: "alerta",
+      texto: `El overhead corporativo se come el ${pct(totalTTM.overhead / totalTTM.noi)} del NOI${sel ? " asignado a esta unidad" : ""}. A este tamano de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
+    });
+  }
+  if (cashOnCash !== null) {
+    consejosCaja.push({
+      tono: cashOnCash >= 8 ? "bueno" : "info",
+      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, el 30% del coste de adquisicion). Referencia sana en vacacional apalancado: 8-12%.`,
+    });
+  }
+  if (servicioTTM === 0 && sel) {
+    consejosCaja.push({
+      tono: "info",
+      texto: "Esta unidad no lleva deuda simulada (sin coste de adquisicion): su financiacion es la renta del master lease, ya incluida en costes fijos.",
+    });
+  }
 
   const opexCats = await costesPorCategoria(periodMeses, sel?.nickname);
   const etiqueta = etiquetaPeriodo(mes, periodo);
@@ -110,13 +180,27 @@ export default async function PnlPage({
             label={`NOI · ${etiqueta}`}
             value={eur(rPeriodo.noi)}
           />
+          <MiniStat label="Caja neta TTM" value={eur(totalTTM.caja)} />
+          <MiniStat label="DSCR TTM" value={dscrTTM !== null ? `${dscrTTM.toFixed(2)}x` : "sin deuda"} />
+          <MiniStat label="Deuda viva" value={eur(deudaViva)} />
+          <MiniStat
+            label="Cash-on-cash TTM"
+            value={cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}
+          />
         </div>
+
+        {consejosCaja.length > 0 && (
+          <Card>
+            <SectionTitle>Lectura del P&amp;L de caja</SectionTitle>
+            <Insights insights={consejosCaja} />
+          </Card>
+        )}
 
         <Card>
           <SectionTitle>
-            P&amp;L mensual · {sel ? sel.displayName : "portfolio"} · 12 meses hasta {mesLabel(mes)}
+            P&amp;L mensual hasta caja · {sel ? sel.displayName : "portfolio"} · 12 meses hasta {mesLabel(mes)}
           </SectionTitle>
-          <PnLTable serie={serie} />
+          <PnLTable serie={serieCash} />
         </Card>
 
         <Card>
