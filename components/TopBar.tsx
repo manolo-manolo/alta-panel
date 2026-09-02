@@ -12,6 +12,7 @@ interface UnidadOpt {
 
 const NAV = [
   { href: "/", label: "Panel" },
+  { href: "/unidades", label: "Unidades" },
   { href: "/pnl", label: "P&L" },
   { href: "/estacionalidad", label: "Estacionalidad" },
   { href: "/costes", label: "Costes" },
@@ -38,6 +39,7 @@ export default function TopBar({
   const [pending, startTransition] = useTransition();
   const [refrescando, setRefrescando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   function irA(path: string, nuevoMes: string, nuevoPeriodo: string) {
     startTransition(() => {
@@ -91,14 +93,14 @@ export default function TopBar({
 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
-      {/* Fila 1: marca + navegacion + acciones */}
+      {/* Fila 1: marca + navegacion (menu plegable en movil) + acciones */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 pt-2.5 pb-1.5">
         <div className="flex min-w-0 items-center gap-5">
           <a href="/" className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-black.png" alt="AltaHomes" className="h-5 w-auto" />
           </a>
-          <nav className="flex items-center gap-1 overflow-x-auto">
+          <nav className="hidden items-center gap-1 overflow-x-auto md:flex">
             {NAV.map((n) => (
               <a
                 key={n.href}
@@ -115,7 +117,7 @@ export default function TopBar({
           </nav>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="hidden shrink-0 items-center gap-1.5 md:flex">
           <button
             onClick={refrescar}
             disabled={refrescando || pending}
@@ -131,11 +133,60 @@ export default function TopBar({
             Salir
           </button>
         </div>
+
+        {/* Boton de menu (solo movil) */}
+        <button
+          onClick={() => setMenuAbierto(!menuAbierto)}
+          aria-label="Abrir menu"
+          aria-expanded={menuAbierto}
+          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink md:hidden"
+        >
+          {menuAbierto ? "Cerrar" : "Menu"}
+        </button>
       </div>
 
-      {/* Fila 2: controles de contexto */}
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 pb-2">
-        <div className="flex items-center rounded-lg border border-line bg-surface">
+      {/* Menu movil desplegable */}
+      {menuAbierto && (
+        <div className="border-t border-line bg-surface px-4 py-2 md:hidden">
+          <nav className="grid grid-cols-2 gap-1">
+            {NAV.map((n) => (
+              <a
+                key={n.href}
+                href={`${n.href}?mes=${mes}&periodo=${periodo}`}
+                className={`rounded-md px-3 py-2 text-sm transition ${
+                  esActiva(n.href)
+                    ? "bg-brand/10 font-medium text-brand-ink"
+                    : "text-muted hover:bg-canvas hover:text-ink"
+                }`}
+              >
+                {n.label}
+              </a>
+            ))}
+          </nav>
+          <div className="mt-2 flex items-center gap-2 border-t border-line/60 pt-2">
+            <button
+              onClick={() => {
+                setMenuAbierto(false);
+                refrescar();
+              }}
+              disabled={refrescando || pending}
+              className="flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink disabled:opacity-50"
+            >
+              {refrescando ? "Actualizando..." : "Actualizar datos"}
+            </button>
+            <button
+              onClick={salir}
+              className="rounded-lg border border-line px-3 py-2 text-sm text-muted"
+            >
+              Salir
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fila 2: controles de contexto (scroll horizontal en movil) */}
+      <div className="mx-auto flex max-w-7xl flex-nowrap items-center gap-2 overflow-x-auto px-4 pb-2 md:flex-wrap md:overflow-visible">
+        <div className="flex shrink-0 items-center rounded-lg border border-line bg-surface">
           <button
             onClick={() => cambiarMes(sumarMeses(mes, -1))}
             className="px-2.5 py-1 text-muted hover:text-ink"
@@ -155,7 +206,7 @@ export default function TopBar({
           </button>
         </div>
 
-        <div className="flex items-center rounded-lg border border-line bg-surface p-0.5">
+        <div className="flex shrink-0 items-center rounded-lg border border-line bg-surface p-0.5">
           {[
             { v: "mes", l: "Mes" },
             { v: "ytd", l: "YTD" },
@@ -179,7 +230,7 @@ export default function TopBar({
         <select
           value={unidadId ?? ""}
           onChange={(e) => cambiarUnidad(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus:border-brand"
+          className="max-w-[45vw] shrink-0 rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink outline-none focus:border-brand sm:max-w-none"
         >
           <option value="">Todo el portfolio</option>
           {unidades.map((u) => (
@@ -189,7 +240,7 @@ export default function TopBar({
           ))}
         </select>
 
-        <span className="ml-auto text-xs text-faint">
+        <span className="ml-auto shrink-0 whitespace-nowrap text-xs text-faint">
           {aviso ? (
             <span className="text-brand">{aviso}</span>
           ) : (

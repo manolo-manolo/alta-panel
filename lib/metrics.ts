@@ -616,6 +616,24 @@ export async function resumenReviews(
   };
 }
 
+/** Rating medio y numero de reviews por unidad desde una fecha. */
+export interface RatingUnidad {
+  media: number;
+  n: number;
+}
+export async function ratingsPorUnidad(desde: string): Promise<Map<string, RatingUnidad>> {
+  const rows = await query<{ listing_id: string; media: number; n: string }>(
+    `SELECT listing_id, AVG(rating) AS media, COUNT(*) AS n
+     FROM reviews
+     WHERE rating IS NOT NULL AND listing_id IS NOT NULL AND review_date >= $1
+     GROUP BY listing_id`,
+    [desde],
+  );
+  const m = new Map<string, RatingUnidad>();
+  for (const r of rows) m.set(r.listing_id, { media: r.media, n: Number(r.n) });
+  return m;
+}
+
 export interface ReviewNo5 {
   id: string;
   channel: string;
