@@ -172,13 +172,13 @@ export default function PnLTable({ serie }: { serie: PnLFila[] }) {
         <span className="text-warn">•</span> costes pendientes
         {esCash && (
           <>
-            {" "}· supuestos de caja: deuda del {Math.round(FINANCIACION.ltv * 100)}% del coste de
-            adquisicion (solo unidades en propiedad), amortizacion lineal a{" "}
-            {FINANCIACION.anosAmortizacion} anos, interes del{" "}
-            {(FINANCIACION.interesAnual * 100).toFixed(1).replace(".", ",")}% sobre saldo vivo, y
-            overhead corporativo de {Math.round(FINANCIACION.overheadAnualEur / 1000)}k EUR/ano
-            repartido por cuota de ingresos netos. Las master lease no llevan deuda: su
-            &quot;financiacion&quot; es la renta, ya incluida en costes fijos.
+            {" "}· caja con deuda real por prestamo (cuota fija, saldos a 31/08/2026; Pena asumida
+            como Paco Romo hasta la firma) y overhead corporativo de{" "}
+            {Math.round(FINANCIACION.overheadAnualEur / 1000)}k EUR/ano repartido por cuota de
+            ingresos netos. Unidades con coste sin prestamo casado usan el supuesto{" "}
+            {Math.round(FINANCIACION.ltv * 100)}% LTV / {FINANCIACION.anosAmortizacion} anos /{" "}
+            {(FINANCIACION.interesAnual * 100).toFixed(1).replace(".", ",")}%. Las master lease no
+            llevan deuda: su &quot;financiacion&quot; es la renta, ya incluida en costes fijos.
           </>
         )}
       </p>

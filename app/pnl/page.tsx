@@ -6,7 +6,12 @@ import PnLTable from "@/components/PnLTable";
 import OpexDetalle from "@/components/OpexDetalle";
 import Insights from "@/components/Insights";
 import type { Insight } from "@/lib/insights";
-import { seriePnLCash, type UnidadFinanciacion } from "@/lib/finance";
+import {
+  seriePnLCash,
+  prestamoDeUnidad,
+  equityUnidad,
+  type UnidadFinanciacion,
+} from "@/lib/finance";
 import { eur, pct, pctDirecto, mesLabel } from "@/lib/format";
 import {
   getUnidades,
@@ -65,6 +70,8 @@ export default async function PnlPage({
   const unidadesFin: UnidadFinanciacion[] = alcance.map((u) => ({
     costeAdquisicion: u.costeAdquisicion,
     inicio: u.fechaInicio ?? u.primeraNoche,
+    nombre: u.displayName,
+    nickname: u.nickname,
   }));
   const serieCash = seriePnLCash(serie, seriePortfolio, unidadesFin, unidades.length);
 
@@ -83,7 +90,8 @@ export default async function PnlPage({
   const dscrTTM = servicioTTM > 0 ? totalTTM.noi / servicioTTM : null;
   const deudaViva = serieCash.length ? serieCash[serieCash.length - 1].saldoDeuda : 0;
   const equity = alcance.reduce(
-    (s, u) => s + (u.costeAdquisicion && u.costeAdquisicion > 0 ? u.costeAdquisicion * 0.3 : 0),
+    (s, u) =>
+      s + equityUnidad(u.costeAdquisicion, prestamoDeUnidad(u.displayName, u.nickname)),
     0,
   );
   const cashOnCash = equity > 0 ? (totalTTM.caja / equity) * 100 : null;
@@ -121,13 +129,13 @@ export default async function PnlPage({
   if (cashOnCash !== null) {
     consejosCaja.push({
       tono: cashOnCash >= 8 ? "bueno" : "info",
-      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, el 30% del coste de adquisicion). Referencia sana en vacacional apalancado: 8-12%.`,
+      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisicion menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
     });
   }
   if (servicioTTM === 0 && sel) {
     consejosCaja.push({
       tono: "info",
-      texto: "Esta unidad no lleva deuda simulada (sin coste de adquisicion): su financiacion es la renta del master lease, ya incluida en costes fijos.",
+      texto: "Esta unidad no lleva deuda: su financiacion es la renta del master lease, ya incluida en costes fijos.",
     });
   }
 

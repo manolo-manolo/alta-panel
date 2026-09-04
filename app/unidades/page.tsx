@@ -4,7 +4,7 @@ import Banner from "@/components/Banner";
 import SetupNotice from "@/components/SetupNotice";
 import { Card, SectionTitle } from "@/components/ui";
 import UnitsCommandTable, { type FilaMando } from "@/components/UnitsCommandTable";
-import { seriePnLCash, type UnidadFinanciacion } from "@/lib/finance";
+import { seriePnLCash, prestamoDeUnidad, type UnidadFinanciacion } from "@/lib/finance";
 import { forwardKpis } from "@/lib/forward";
 import { accionesUnidad } from "@/lib/unit-actions";
 import type { Insight } from "@/lib/insights";
@@ -93,6 +93,8 @@ export default async function UnidadesPage({
   const finDe = (u: UnidadInfo): UnidadFinanciacion => ({
     costeAdquisicion: u.costeAdquisicion,
     inicio: u.fechaInicio ?? u.primeraNoche,
+    nombre: u.displayName,
+    nickname: u.nickname,
   });
 
   const filas: FilaMando[] = [];
@@ -107,7 +109,9 @@ export default async function UnidadesPage({
       unidades.length,
     );
     const caja = cash.reduce((s, m) => s + m.caja, 0);
-    const tieneDeuda = !!(u.costeAdquisicion && u.costeAdquisicion > 0);
+    const tieneDeuda =
+      !!prestamoDeUnidad(u.displayName, u.nickname) ||
+      !!(u.costeAdquisicion && u.costeAdquisicion > 0);
     const nt = noiTTM(u, map, mesesTTM);
     const v30 = (fwd.porUnidad.get(u.listingId) ?? []).find((v) => v.dias === 30);
     const rating = ratings.get(u.listingId);
