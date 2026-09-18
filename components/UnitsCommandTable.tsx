@@ -19,6 +19,8 @@ export interface FilaMando {
   caja: number;
   rendimiento: number | null; // yield o margen TTM, en %
   rendimientoTipo: "yield" | "margen" | null;
+  occBreakEven: number | null; // ocupacion de equilibrio de caja (TTM)
+  occTTM: number | null;
   rating90: number | null;
   numReviews90: number;
   otbOcc: number | null;
@@ -30,7 +32,7 @@ export interface FilaMando {
 
 type ColKey =
   | "nombre" | "occ" | "adr" | "revpar" | "netos" | "noi" | "caja"
-  | "rendimiento" | "rating90" | "otbOcc";
+  | "occBreakEven" | "rendimiento" | "rating90" | "otbOcc";
 
 const COLS: { key: ColKey; label: string }[] = [
   { key: "occ", label: "Occ" },
@@ -39,6 +41,7 @@ const COLS: { key: ColKey; label: string }[] = [
   { key: "netos", label: "Ingresos" },
   { key: "noi", label: "NOI" },
   { key: "caja", label: "Caja" },
+  { key: "occBreakEven", label: "Occ b/e" },
   { key: "rendimiento", label: "Yield/Margen" },
   { key: "rating90", label: "Rating 90d" },
   { key: "otbOcc", label: "OTB 30d" },
@@ -53,6 +56,7 @@ function valor(f: FilaMando, key: ColKey): number {
     case "netos": return f.netos;
     case "noi": return f.noi;
     case "caja": return f.caja;
+    case "occBreakEven": return f.occBreakEven ?? -1;
     case "rendimiento": return f.rendimiento ?? -9999;
     case "rating90": return f.rating90 ?? -1;
     case "otbOcc": return f.otbOcc ?? -1;
@@ -114,6 +118,28 @@ export default function UnitsCommandTable({
       >
         {eur(f.caja)}
       </td>
+      <td
+        className="whitespace-nowrap px-2 py-2 text-right"
+        title={
+          f.occBreakEven !== null
+            ? `Ocupacion que cubre fijos, overhead y deuda (base TTM); ocupacion TTM real: ${pct(f.occTTM)}`
+            : undefined
+        }
+      >
+        {f.occBreakEven === null ? (
+          <span className="text-faint">-</span>
+        ) : (
+          <span
+            className={
+              f.occTTM !== null && f.occTTM < f.occBreakEven - 0.02
+                ? "text-bad"
+                : "text-muted"
+            }
+          >
+            {pct(f.occBreakEven)}
+          </span>
+        )}
+      </td>
       <td className="whitespace-nowrap px-2 py-2 text-right">
         {f.rendimiento === null ? (
           <span className="text-faint">-</span>
@@ -148,7 +174,7 @@ export default function UnitsCommandTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[980px] border-collapse text-sm">
+      <table className="tabular w-full min-w-[1060px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-line text-xs text-faint">
             <th
@@ -197,8 +223,9 @@ export default function UnitsCommandTable({
       </table>
       <p className="mt-2 text-xs text-faint">
         Ingresos, NOI y caja del periodo seleccionado; yield/margen sobre los ultimos 12 meses;
-        rating de los ultimos 90 dias; OTB = ocupacion ya reservada para los proximos 30 dias
-        (▲▼ vs el mismo punto del ano pasado). Clic en una fila para abrir la unidad.
+        Occ b/e = ocupacion de equilibrio de caja (en rojo si la ocupacion TTM no llega); rating
+        de los ultimos 90 dias; OTB = ocupacion ya reservada para los proximos 30 dias (▲▼ vs el
+        mismo punto del ano pasado). Clic en una fila para abrir la unidad.
       </p>
     </div>
   );

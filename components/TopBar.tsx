@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { sumarMeses } from "@/lib/time";
 import { mesLabel, fechaHora } from "@/lib/format";
@@ -12,6 +13,7 @@ interface UnidadOpt {
 
 const NAV = [
   { href: "/", label: "Panel" },
+  { href: "/acciones", label: "Acciones" },
   { href: "/unidades", label: "Unidades" },
   { href: "/pnl", label: "P&L" },
   { href: "/estacionalidad", label: "Estacionalidad" },
@@ -96,10 +98,10 @@ export default function TopBar({
       {/* Fila 1: marca + navegacion (menu plegable en movil) + acciones */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 pt-2.5 pb-1.5">
         <div className="flex min-w-0 items-center gap-5">
-          <a href="/" className="shrink-0">
+          <Link href="/" className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo-black.png" alt="AltaHomes" className="h-5 w-auto" />
-          </a>
+          </Link>
           <nav className="hidden items-center gap-1 overflow-x-auto md:flex">
             {NAV.map((n) => (
               <a
