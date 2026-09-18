@@ -4,7 +4,12 @@ import Banner from "@/components/Banner";
 import SetupNotice from "@/components/SetupNotice";
 import { Card, SectionTitle } from "@/components/ui";
 import UnitsCommandTable, { type FilaMando } from "@/components/UnitsCommandTable";
-import { seriePnLCash, prestamoDeUnidad, type UnidadFinanciacion } from "@/lib/finance";
+import {
+  seriePnLCash,
+  prestamoDeUnidad,
+  breakEvenOcc,
+  type UnidadFinanciacion,
+} from "@/lib/finance";
 import { forwardKpis } from "@/lib/forward";
 import { accionesUnidad } from "@/lib/unit-actions";
 import type { Insight } from "@/lib/insights";
@@ -88,6 +93,7 @@ export default async function UnidadesPage({
     meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x);
 
   const seriePortfolio = seriePnL(map, unidades, periodMeses);
+  const seriePortfolioTTM = seriePnL(map, unidades, mesesTTM);
   const rPortfolio = sumar(unidades.flatMap((u) => itemsUnidad(u, periodMeses)));
   const occPortfolio = ocupacionDe(rPortfolio);
   const finDe = (u: UnidadInfo): UnidadFinanciacion => ({
@@ -113,6 +119,25 @@ export default async function UnidadesPage({
       !!prestamoDeUnidad(u.displayName, u.nickname) ||
       !!(u.costeAdquisicion && u.costeAdquisicion > 0);
     const nt = noiTTM(u, map, mesesTTM);
+
+    // Punto de equilibrio de caja sobre base TTM.
+    const rTTM = sumar(itemsUnidad(u, mesesTTM));
+    const cashTTM = seriePnLCash(
+      seriePnL(map, [u], mesesTTM),
+      seriePortfolioTTM,
+      [finDe(u)],
+      unidades.length,
+    );
+    const occBE = breakEvenOcc({
+      netos: rTTM.netos,
+      costesVariables: rTTM.costesVariables,
+      costesFijos: rTTM.costesFijos,
+      vendidas: rTTM.vendidas,
+      disponibles: rTTM.disponibles,
+      overhead: cashTTM.reduce((s, m) => s + m.overhead, 0),
+      servicioDeuda: cashTTM.reduce((s, m) => s + m.intereses + m.principal, 0),
+    });
+    const occTTM = ocupacionDe(rTTM);
     const v30 = (fwd.porUnidad.get(u.listingId) ?? []).find((v) => v.dias === 30);
     const rating = ratings.get(u.listingId);
     const costesPendientes = itemsUnidad(u, periodMeses).some((x) => x.costesPendientes);
@@ -135,6 +160,8 @@ export default async function UnidadesPage({
       otbOccSTLY: v30?.occSTLY ?? null,
       otbNoches: v30?.noches ?? 0,
       otbDisponibles: v30?.disponibles ?? 0,
+      occBreakEven: occBE,
+      occTTM,
       costesPendientes,
     });
 
@@ -148,6 +175,8 @@ export default async function UnidadesPage({
       costesPendientes,
       yieldPct: nt.yieldPct,
       margenPct: nt.margenPct,
+      occBreakEven: occBE,
+      occTTM,
       otbOcc: v30?.occ ?? null,
       otbOccSTLY: v30?.occSTLY ?? null,
       otbAdr: v30?.adr ?? null,
@@ -198,6 +227,25 @@ export default async function UnidadesPage({
     otbOccSTLY: v30Port?.occSTLY ?? null,
     otbNoches: v30Port?.noches ?? 0,
     otbDisponibles: v30Port?.disponibles ?? 0,
+    occBreakEven: (() => {
+      const rTTMp = sumar(unidades.flatMap((u) => itemsUnidad(u, mesesTTM)));
+      const cashTTMp = seriePnLCash(
+        seriePortfolioTTM,
+        seriePortfolioTTM,
+        unidades.map(finDe),
+        unidades.length,
+      );
+      return breakEvenOcc({
+        netos: rTTMp.netos,
+        costesVariables: rTTMp.costesVariables,
+        costesFijos: rTTMp.costesFijos,
+        vendidas: rTTMp.vendidas,
+        disponibles: rTTMp.disponibles,
+        overhead: cashTTMp.reduce((s, m) => s + m.overhead, 0),
+        servicioDeuda: cashTTMp.reduce((s, m) => s + m.intereses + m.principal, 0),
+      });
+    })(),
+    occTTM: ocupacionDe(sumar(unidades.flatMap((u) => itemsUnidad(u, mesesTTM)))),
     costesPendientes: false,
   };
 

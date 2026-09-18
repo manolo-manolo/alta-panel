@@ -10,14 +10,17 @@ import {
   seriePnLCash,
   prestamoDeUnidad,
   equityUnidad,
+  lecturaCaja,
   type UnidadFinanciacion,
 } from "@/lib/finance";
+import { CAP_RATE } from "@/lib/config";
 import { eur, pct, pctDirecto, mesLabel } from "@/lib/format";
 import {
   getUnidades,
   unidadMesMap,
   sumar,
   seriePnL,
+  noiTTM,
   costesPorCategoria,
   estadoDatos,
   ttm,
@@ -97,47 +100,22 @@ export default async function PnlPage({
   const cashOnCash = equity > 0 ? (totalTTM.caja / equity) * 100 : null;
 
   // Lectura rapida del P&L de caja.
-  const consejosCaja: Insight[] = [];
-  if (dscrTTM !== null && dscrTTM < 1.2) {
-    consejosCaja.push({
-      tono: "alerta",
-      texto: `DSCR TTM de ${dscrTTM.toFixed(2)}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o mas). Sube NOI o alarga plazo antes de apalancar mas.`,
-    });
-  } else if (dscrTTM !== null && dscrTTM >= 1.5) {
-    consejosCaja.push({
-      tono: "bueno",
-      texto: `DSCR TTM de ${dscrTTM.toFixed(2)}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
-    });
-  }
-  if (totalTTM.caja < 0) {
-    consejosCaja.push({
-      tono: "alerta",
-      texto: `Caja neta TTM negativa (${eur(totalTTM.caja)}): tras overhead y deuda el negocio consume caja. Mira que linea pesa mas: overhead ${eur(totalTTM.overhead)}, intereses ${eur(totalTTM.intereses)}, principal ${eur(totalTTM.principal)}.`,
-    });
-  } else if (totalTTM.caja > 0 && totalTTM.ing > 0) {
-    consejosCaja.push({
-      tono: "bueno",
-      texto: `Generacion de caja TTM de ${eur(totalTTM.caja)} (${pct(totalTTM.caja / totalTTM.ing)} de los ingresos), ya descontados overhead, intereses y amortizacion. La amortizacion (${eur(totalTTM.principal)}) ademas construye patrimonio: no es gasto perdido.`,
-    });
-  }
-  if (totalTTM.noi > 0 && totalTTM.overhead / totalTTM.noi >= 0.35) {
-    consejosCaja.push({
-      tono: "alerta",
-      texto: `El overhead corporativo se come el ${pct(totalTTM.overhead / totalTTM.noi)} del NOI${sel ? " asignado a esta unidad" : ""}. A este tamano de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
-    });
-  }
-  if (cashOnCash !== null) {
-    consejosCaja.push({
-      tono: cashOnCash >= 8 ? "bueno" : "info",
-      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisicion menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
-    });
-  }
-  if (servicioTTM === 0 && sel) {
-    consejosCaja.push({
-      tono: "info",
-      texto: "Esta unidad no lleva deuda: su financiacion es la renta del master lease, ya incluida en costes fijos.",
-    });
-  }
+  const consejosCaja: Insight[] = lecturaCaja(totalTTM, equity, !!sel);
+
+  // Patrimonio orientativo: valor implicito por cap rate sobre el NOI TTM de
+  // las unidades en propiedad del alcance, contra la deuda viva real.
+  const propias = alcance.filter(
+    (u) =>
+      (u.costeAdquisicion && u.costeAdquisicion > 0) ||
+      prestamoDeUnidad(u.displayName, u.nickname),
+  );
+  const noiTTMPropio = propias.reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+  const costePropio = propias.reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
+  const valorRef = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.ref : null;
+  const valorMin = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.max : null;
+  const valorMax = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.min : null;
+  const equityNeto = valorRef !== null ? valorRef - deudaViva : null;
+  const ltvActual = valorRef && valorRef > 0 ? deudaViva / valorRef : null;
 
   const opexCats = await costesPorCategoria(periodMeses, sel?.nickname);
   const etiqueta = etiquetaPeriodo(mes, periodo);
@@ -210,6 +188,38 @@ export default async function PnlPage({
           </SectionTitle>
           <PnLTable serie={serieCash} />
         </Card>
+
+        {valorRef !== null && (
+          <Card>
+            <SectionTitle>
+              Patrimonio (orientativo) · {sel ? sel.displayName : "unidades en propiedad"}
+            </SectionTitle>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              <MiniStat
+                label={`Valor implicito (${Math.round(CAP_RATE.ref * 100)}% cap)`}
+                value={eur(valorRef)}
+              />
+              <MiniStat
+                label="Banda de valor"
+                value={`${eur(valorMin)} - ${eur(valorMax)}`}
+              />
+              <MiniStat label="Deuda viva" value={eur(deudaViva)} />
+              <MiniStat label="Equity neto" value={eur(equityNeto)} />
+              <MiniStat
+                label="Plusvalia vs coste"
+                value={costePropio > 0 ? eur(valorRef - costePropio) : "-"}
+              />
+              <MiniStat label="LTV actual" value={ltvActual !== null ? pct(ltvActual) : "-"} />
+            </div>
+            <p className="mt-2 text-xs text-faint">
+              Valor = NOI TTM de las unidades en propiedad ({eur(noiTTMPropio)}) capitalizado a un
+              cap rate del {Math.round(CAP_RATE.min * 100)}-{Math.round(CAP_RATE.max * 100)}% (
+              referencia {Math.round(CAP_RATE.ref * 100)}%). Es una referencia de gestion, no una
+              tasacion. El equity neto usa el valor de referencia menos la deuda viva real; cada
+              mes se suman ~{eur(totalTTM.principal / 12)} de amortizacion al patrimonio.
+            </p>
+          </Card>
+        )}
 
         <Card>
           <SectionTitle>

@@ -81,6 +81,10 @@ export const FINANCIACION = {
   overheadAnualEur: 40_000,
 } as const;
 
+// Banda de cap rate para la valoracion implicita del portfolio en propiedad
+// (valor = NOI TTM / cap rate). Orientativa, no una tasacion.
+export const CAP_RATE = { min: 0.06, ref: 0.07, max: 0.08 } as const;
+
 // Banda objetivo de NOI yield TTM (unidades en propiedad), en porcentaje.
 export const NOI_YIELD_VERDE = 9; // en banda o por encima
 export const NOI_YIELD_AMBAR = 7; // entre 7 y 9

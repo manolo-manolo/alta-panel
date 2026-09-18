@@ -5,7 +5,9 @@
 import { FINANCIACION } from "@/lib/config";
 import { PRESTAMOS, type PrestamoReal } from "@/lib/debt-data";
 import { sumarMeses } from "@/lib/time";
+import { eur, pct, pctDirecto } from "@/lib/format";
 import type { PnLMes } from "@/lib/metrics";
+import type { Insight } from "@/lib/insights";
 
 // --- Prestamos reales (sistema frances: cuota fija) ---
 
@@ -105,6 +107,66 @@ export function deudaRealMes(p: PrestamoReal, mes: string): CuotaMes {
   return scheduleDeuda(p).get(mes) ?? { intereses: 0, principal: 0, saldoCierre: 0 };
 }
 
+/** Totales TTM del P&L de caja para la lectura automatica. */
+export interface TotalesCaja {
+  ing: number;
+  noi: number;
+  overhead: number;
+  intereses: number;
+  principal: number;
+  caja: number;
+}
+
+/** Lectura automatica del P&L de caja (DSCR, caja, overhead, cash-on-cash). */
+export function lecturaCaja(t: TotalesCaja, equity: number, esUnidad: boolean): Insight[] {
+  const out: Insight[] = [];
+  const servicio = t.intereses + t.principal;
+  const dscr = servicio > 0 ? t.noi / servicio : null;
+  const cashOnCash = equity > 0 ? (t.caja / equity) * 100 : null;
+
+  if (dscr !== null && dscr < 1.2) {
+    out.push({
+      tono: "alerta",
+      texto: `DSCR TTM de ${dscr.toFixed(2)}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o mas). Sube NOI o alarga plazo antes de apalancar mas.`,
+    });
+  } else if (dscr !== null && dscr >= 1.5) {
+    out.push({
+      tono: "bueno",
+      texto: `DSCR TTM de ${dscr.toFixed(2)}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
+    });
+  }
+  if (t.caja < 0) {
+    out.push({
+      tono: "alerta",
+      texto: `Caja neta TTM negativa (${eur(t.caja)}): tras overhead y deuda el negocio consume caja. Mira que linea pesa mas: overhead ${eur(t.overhead)}, intereses ${eur(t.intereses)}, principal ${eur(t.principal)}.`,
+    });
+  } else if (t.caja > 0 && t.ing > 0) {
+    out.push({
+      tono: "bueno",
+      texto: `Generacion de caja TTM de ${eur(t.caja)} (${pct(t.caja / t.ing)} de los ingresos), ya descontados overhead, intereses y amortizacion. La amortizacion (${eur(t.principal)}) ademas construye patrimonio: no es gasto perdido.`,
+    });
+  }
+  if (t.noi > 0 && t.overhead / t.noi >= 0.35) {
+    out.push({
+      tono: "alerta",
+      texto: `El overhead corporativo se come el ${pct(t.overhead / t.noi)} del NOI${esUnidad ? " asignado a esta unidad" : ""}. A este tamano de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
+    });
+  }
+  if (cashOnCash !== null) {
+    out.push({
+      tono: cashOnCash >= 8 ? "bueno" : "info",
+      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisicion menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
+    });
+  }
+  if (servicio === 0 && esUnidad) {
+    out.push({
+      tono: "info",
+      texto: "Esta unidad no lleva deuda: su financiacion es la renta del master lease, ya incluida en costes fijos.",
+    });
+  }
+  return out;
+}
+
 /** Equity invertido en una unidad: coste menos el prestamo real (o el LTV supuesto). */
 export function equityUnidad(
   costeAdquisicion: number | null,
@@ -153,6 +215,27 @@ export function deudaMes(
     intereses: (saldoInicial * FINANCIACION.interesAnual) / 12,
     principal: principalTotal / nMeses,
   };
+}
+
+/**
+ * Ocupacion de equilibrio de caja: con que ocupacion la contribucion por
+ * noche vendida (ingresos netos menos costes variables) cubre costes fijos,
+ * overhead y servicio de deuda. Calculado sobre una base TTM para estabilidad.
+ */
+export function breakEvenOcc(t: {
+  netos: number;
+  costesVariables: number;
+  costesFijos: number;
+  vendidas: number;
+  disponibles: number;
+  overhead: number;
+  servicioDeuda: number;
+}): number | null {
+  if (t.vendidas <= 0 || t.disponibles <= 0) return null;
+  const margenNoche = (t.netos - t.costesVariables) / t.vendidas;
+  if (margenNoche <= 0) return null;
+  const cargaFija = t.costesFijos + t.overhead + t.servicioDeuda;
+  return Math.min(2, Math.max(0, cargaFija / (margenNoche * t.disponibles)));
 }
 
 export interface CashExtras {

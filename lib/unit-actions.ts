@@ -15,6 +15,10 @@ export interface UnidadAccionInput {
   // Rendimiento TTM
   yieldPct: number | null; // propiedad
   margenPct: number | null; // master lease
+  /** Ocupacion de equilibrio de caja (TTM), fraccion. */
+  occBreakEven: number | null;
+  /** Ocupacion TTM real para comparar contra el equilibrio. */
+  occTTM: number | null;
   // Cartera a 30 dias (on the books)
   otbOcc: number | null;
   otbOccSTLY: number | null;
@@ -78,8 +82,17 @@ export function accionesUnidad(i: UnidadAccionInput): Insight[] {
     });
   }
 
-  // Caja del periodo.
-  if (i.caja < -50 && i.tieneDeuda) {
+  // Equilibrio de caja: la ocupacion sostenida no cubre los costes totales.
+  if (
+    i.occBreakEven !== null &&
+    i.occTTM !== null &&
+    i.occTTM < i.occBreakEven - 0.02
+  ) {
+    alertas.push({
+      tono: "alerta",
+      texto: `Por debajo del punto de equilibrio de caja: necesita ${pct0(i.occBreakEven)} de ocupacion para cubrir fijos, overhead y deuda, y lleva ${pct0(i.occTTM)} en 12 meses. O sube RevPAR (precio u ocupacion) o baja estructura.`,
+    });
+  } else if (i.caja < -50 && i.tieneDeuda) {
     alertas.push({
       tono: "alerta",
       texto: `Caja negativa en el periodo (${eur0(i.caja)}): el NOI no cubre overhead y servicio de deuda.`,
