@@ -94,18 +94,40 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
     });
   }
 
-  // Retraso: muy por detras del ritmo y con tiempo para reaccionar.
-  const atrasado = diff !== null && diff <= -0.1 && (m.occSTLY as number) >= 0.15 && m.diasHasta <= 75;
+  // Retraso: solo se toca precio si (1) el mes esta cerca, (2) la proyeccion
+  // con la recogida tipica del ano pasado sigue sin llegar al cierre de
+  // entonces y (3) el ADR va claramente por encima del ano pasado. Lejos en
+  // el tiempo el ritmo es una senal debil (ventanas de reserva que cambian) y
+  // bajar precio pronto es el error mas caro; se vigila, no se baja.
+  const atrasado = diff !== null && diff <= -0.1 && (m.occSTLY as number) >= 0.15;
   if (atrasado && margen !== null) {
-    const objetivo = Math.max(m.occLY ?? 0, m.occSTLY as number);
+    const pickupLY = Math.max(0, m.nochesLY - m.nochesSTLY);
+    const occProy = Math.min(1, (m.noches + pickupLY) / m.disponibles);
+    const objetivo = m.occLY ?? (m.occSTLY as number);
+    const proyCorta = occProy < objetivo - 0.05;
     const nochesGap = Math.max(0, objetivo * m.disponibles - m.noches);
     const precioAlto = m.adrLY !== null && m.adr !== null && m.adr >= m.adrLY * 1.08;
-    if (precioAlto) {
+    if (!proyCorta) {
+      out.push({
+        tono: "info",
+        palanca: "vigilar",
+        impacto: null,
+        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detras del ritmo del ano pasado, pero con la recogida tipica de entonces (${pickupLY} noches) cerraria en torno al ${pct0(occProy)}. No toques precio: vigila cada semana.`,
+      });
+    } else if (m.diasHasta > 45) {
+      out.push({
+        tono: "info",
+        palanca: "vigilar",
+        impacto: nochesGap * margen * 0.5,
+        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detras (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}) y la proyeccion (${pct0(occProy)}) no llega al cierre del ano pasado (${pct0(objetivo)}). Aun quedan ${m.diasHasta} dias: no bajes precio todavia; trabaja visibilidad (fotos, titulo, promociones de canal) y reevalua a 45 dias.`,
+      });
+    } else if (precioAlto) {
+      const impacto = nochesGap * margen * DESCUENTO_MARGEN;
       out.push({
         tono: "alerta",
         palanca: "precio",
-        impacto: nochesGap * margen * DESCUENTO_MARGEN,
-        texto: `Baja las tarifas de ${etiquetaMes} un 8-10%: vas al ${pct0(m.occ)} vs ${pct0(m.occSTLY as number)} el ano pasado a estas alturas y el ADR (${eur0(m.adr!)}) esta un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} por encima del de entonces (${eur0(m.adrLY!)}). El precio esta frenando: ${Math.round(nochesGap)} noches en juego ≈ ${eur0(nochesGap * margen * DESCUENTO_MARGEN)}.`,
+        impacto,
+        texto: `${etiquetaMes} a ${m.diasHasta} dias: vas al ${pct0(m.occ)} vs ${pct0(m.occSTLY as number)} el ano pasado, la proyeccion (${pct0(occProy)}) no llega al cierre de entonces (${pct0(objetivo)}) y el ADR (${eur0(m.adr!)}) esta un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} por encima (${eur0(m.adrLY!)}). Ajusta un 5-8% solo en las fechas sin vender (no la tarifa base) y anade descuento de 3+ noches: ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)}.`,
       });
     } else {
       const impacto = nochesGap * margen * 0.5;
@@ -113,7 +135,7 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
         tono: "alerta",
         palanca: "visibilidad",
         impacto,
-        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detras del ano pasado (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}) y NO es precio (ADR en linea). Toca visibilidad: fotos y titulo, estancia minima, promocion en Airbnb/Booking y respuesta rapida. ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)} recuperables.`,
+        texto: `${etiquetaMes} a ${m.diasHasta} dias va ${Math.abs(Math.round((diff as number) * 100))} pts por detras (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}), la proyeccion (${pct0(occProy)}) no llega al cierre del ano pasado y NO es precio (ADR en linea). Toca visibilidad: fotos y titulo, estancia minima, promocion en Airbnb/Booking y respuesta rapida. ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)} recuperables.`,
       });
     }
   }
