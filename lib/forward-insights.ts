@@ -68,7 +68,7 @@ export function generarInsightsForward(
       const pickupLY = Math.max(0, v30.nochesLY - v30.nochesSTLY);
       alertas.push({
         tono: "alerta",
-        texto: `Ritmo a 30 dias por detras del ano pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} menos). El ano pasado esa ventana cerro al ${v30.occLY !== null ? pct0(v30.occLY) : "n/d"} con ${pickupLY} noches de recogida tardia. Revisa precios, estancia minima y promociones para no depender solo de la ultima hora.`,
+        texto: `Ritmo a 30 dias por detras del ano pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} menos). El ano pasado esa ventana cerro al ${v30.occLY !== null ? pct0(v30.occLY) : "n/d"} con ${pickupLY} noches de recogida tardia. No bajes precio en bloque: mira en las acciones por unidad que pisos y meses van por detras y si es precio o visibilidad.`,
       });
     } else if (diff >= 0.05) {
       buenas.push({
@@ -102,15 +102,17 @@ export function generarInsightsForward(
     }
   }
 
-  // 3) Urgencia a 15 dias: noches sin vender y su valor.
+  // 3) Urgencia a 15 dias: solo si la recogida tipica no cierra la ventana.
   if (v15 && v15.disponibles > 0) {
     const libres = Math.max(0, v15.disponibles - v15.noches);
     const occ15 = v15.occ ?? 0;
-    if (occ15 < 0.55 && libres > 0) {
+    const proyCorta =
+      v15.occProy !== null && v15.occLY !== null ? v15.occProy < v15.occLY - 0.08 : occ15 < 0.4;
+    if (proyCorta && libres > 0) {
       const valor = v15.adr !== null ? ` (~${eur0(libres * v15.adr)} al ADR actual)` : "";
       alertas.push({
         tono: "alerta",
-        texto: `Ventana critica: ${sujeto} tiene ${libres} noche${libres === 1 ? "" : "s"} sin vender en los proximos 15 dias con ocupacion OTB del ${pct0(occ15)}${valor}. Activa descuentos last minute (10-15%), relaja la estancia minima y revisa la visibilidad en canales.`,
+        texto: `Ventana critica: ${sujeto} tiene ${libres} noche${libres === 1 ? "" : "s"} sin vender en los proximos 15 dias${valor} y la recogida tipica del ano pasado no basta para cerrarla (proyeccion ${v15.occProy !== null ? pct0(v15.occProy) : pct0(occ15)} vs cierre LY ${v15.occLY !== null ? pct0(v15.occLY) : "n/d"}). Descuento last minute escalonado y estancia minima de 1 noche en huecos.`,
       });
     }
   }
