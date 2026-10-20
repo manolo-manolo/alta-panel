@@ -4,7 +4,7 @@ import Banner from "@/components/Banner";
 import { Card, SectionTitle } from "@/components/ui";
 import { generarAcciones, type Accion } from "@/lib/acciones";
 import { getUnidades, estadoDatos, mesPorDefecto } from "@/lib/metrics";
-import { mesLabel, num } from "@/lib/format";
+import { mesLabel, num, eur } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +42,11 @@ function Bloque({ titulo, items }: { titulo: string; items: Accion[] }) {
               </span>
               {a.texto}
             </span>
+            {a.impacto !== null && a.impacto >= 50 && (
+              <span className="tabular shrink-0 self-start text-xs font-semibold text-ink">
+                {eur(a.impacto)}
+              </span>
+            )}
             <span className="shrink-0 self-center text-faint">›</span>
           </a>
         ))}
@@ -93,6 +98,12 @@ export default async function AccionesPage() {
             <span className="font-semibold text-ok">{num(centro.oportunidades)}</span>{" "}
             oportunidades ·{" "}
             <span className="font-semibold text-brand">{num(centro.avisos)}</span> avisos
+            {centro.potencial > 0 && (
+              <>
+                {" "}· potencial ≈{" "}
+                <span className="font-semibold text-ink">{eur(centro.potencial)}</span>
+              </>
+            )}
           </p>
         </div>
 
@@ -109,8 +120,10 @@ export default async function AccionesPage() {
         <Bloque titulo="Avisos" items={avisos} />
 
         <p className="text-xs text-faint">
-          Agrega revenue (vision futura), acciones por unidad y lectura del P&amp;L de caja sobre
-          el mes actual y los ultimos 12 meses. Los consejos de costes estan en{" "}
+          Ordenadas por severidad y, dentro de cada bloque, por euros estimados (supuestos
+          conservadores: +10% de precio sobre noches por vender, relleno parcial de huecos y
+          noches libres, margen por noche real de cada unidad). Agrega revenue (vision futura),
+          acciones por unidad y lectura del P&amp;L de caja. Los consejos de costes estan en{" "}
           <a href="/costes" className="text-brand hover:underline">Costes</a> y los de la web en{" "}
           <a href="/web" className="text-brand hover:underline">Web</a>.
         </p>
