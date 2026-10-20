@@ -183,10 +183,11 @@ async function paginar<T>(
   return out;
 }
 
-/** Lista todos los listings. */
+/** Lista todos los listings con el contenido publico (para la auditoria de anuncios). */
 export async function listGuestyListings(): Promise<GuestyListing[]> {
   return paginar<GuestyListing>("/listings", {
-    fields: "_id nickname title address active",
+    fields:
+      "_id nickname title address active isListed pictures picture amenities publicDescription prices terms accommodates bedrooms bathrooms beds propertyType roomType tags defaultCheckInTime defaultCheckOutTime",
   });
 }
 

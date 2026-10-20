@@ -15,6 +15,7 @@ const NAV = [
   { href: "/", label: "Panel" },
   { href: "/acciones", label: "Acciones" },
   { href: "/unidades", label: "Unidades" },
+  { href: "/anuncios", label: "Anuncios" },
   { href: "/pnl", label: "P&L" },
   { href: "/estacionalidad", label: "Estacionalidad" },
   { href: "/costes", label: "Costes" },
