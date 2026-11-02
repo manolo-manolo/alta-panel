@@ -42,7 +42,7 @@ export interface AuditoriaAnuncio {
 const AMENITIES_CLAVE: { nombre: string; patron: RegExp }[] = [
   { nombre: "Wifi", patron: /wifi|wireless internet|\binternet\b/i },
   { nombre: "Aire acondicionado", patron: /air condition|\bac\b|aire acondicionado/i },
-  { nombre: "Calefaccion", patron: /heating|calefacci/i },
+  { nombre: "Calefacción", patron: /heating|calefacci/i },
   { nombre: "Cocina", patron: /kitchen|cocina/i },
   { nombre: "Lavadora", patron: /washer|washing machine|lavadora/i },
   { nombre: "Espacio de trabajo", patron: /workspace|laptop|desk|escritorio/i },
@@ -52,7 +52,7 @@ const AMENITIES_CLAVE: { nombre: string; patron: RegExp }[] = [
   { nombre: "Secador", patron: /hair ?dryer|secador/i },
   { nombre: "Cafetera", patron: /coffee|cafetera/i },
   { nombre: "Plancha", patron: /\biron\b|plancha/i },
-  { nombre: "Basicos (toallas, sabanas, jabon)", patron: /essentials|basicos/i },
+  { nombre: "Básicos (toallas, sábanas, jabón)", patron: /essentials|basicos/i },
   { nombre: "Ascensor", patron: /elevator|\blift\b|ascensor/i },
 ];
 
@@ -147,7 +147,7 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: fotos < 8 ? "alerta" : "info",
       area: "fotos",
-      texto: `${fotos} fotos. Los anuncios que mejor convierten llevan 25-35: anade exteriores, zona, detalles (cafetera, cama hecha, bano) y una foto con luz natural de cada estancia. Primera foto = la mejor vista o estancia principal.`,
+      texto: `${fotos} fotos. Los anuncios que mejor convierten llevan 25-35: añade exteriores, zona, detalles (cafetera, cama hecha, baño) y una foto con luz natural de cada estancia. Primera foto = la mejor vista o estancia principal.`,
     });
   }
   const sinCaption = pictures.filter((p) => !str(obj(p).caption)).length;
@@ -163,23 +163,24 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
   if (titulo) {
     const len = titulo.length;
     const mayusculas = titulo === titulo.toUpperCase() && /[A-Z]/.test(titulo);
-    const gancho = PALABRAS_GANCHO.some((p) => titulo.toLowerCase().includes(p));
+    const tituloNorm = titulo.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const gancho = PALABRAS_GANCHO.some((p) => tituloNorm.includes(p));
     if (len >= 25 && len <= 55 && !mayusculas && gancho) puntos += 10;
     else if (len >= 15 && len <= 65 && !mayusculas) puntos += 6;
     else puntos += 2;
     if (len > 55) {
-      h.push({ tono: "info", area: "titulo", texto: `Titulo de ${len} caracteres: Airbnb lo corta en movil hacia los 50. Deja el gancho al principio ("Atico con terraza y vistas al mar, centro").` });
+      h.push({ tono: "info", area: "titulo", texto: `Título de ${len} caracteres: Airbnb lo corta en móvil hacia los 50. Deja el gancho al principio ("Ático con terraza y vistas al mar, centro").` });
     } else if (len < 20) {
-      h.push({ tono: "info", area: "titulo", texto: `Titulo de ${len} caracteres: aprovecha hasta 50 con el mejor gancho (vistas, terraza, zona, parking) y el tipo de alojamiento.` });
+      h.push({ tono: "info", area: "titulo", texto: `Título de ${len} caracteres: aprovecha hasta 50 con el mejor gancho (vistas, terraza, zona, parking) y el tipo de alojamiento.` });
     }
     if (!gancho) {
-      h.push({ tono: "info", area: "titulo", texto: `El titulo no vende nada concreto: mete el atributo que decide ("terraza", "vistas", "junto a la playa", "parking", "centro historico").` });
+      h.push({ tono: "info", area: "titulo", texto: `El título no vende nada concreto: mete el atributo que decide ("terraza", "vistas", "junto a la playa", "parking", "centro histórico").` });
     }
     if (mayusculas) {
-      h.push({ tono: "info", area: "titulo", texto: "Titulo en mayusculas: penaliza la lectura y parece spam. Usa capitalizacion normal." });
+      h.push({ tono: "info", area: "titulo", texto: "Título en mayúsculas: penaliza la lectura y parece spam. Usa capitalización normal." });
     }
   } else {
-    h.push({ tono: "alerta", area: "titulo", texto: "Sin titulo en el anuncio." });
+    h.push({ tono: "alerta", area: "titulo", texto: "Sin título en el anuncio." });
   }
 
   // Descripcion (15)
@@ -190,12 +191,12 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: descripcionLen < 150 ? "alerta" : "info",
       area: "descripcion",
-      texto: `Descripcion de ${descripcionLen} caracteres. Las que convierten superan los 900 y responden a: para quien es, que tiene cada estancia, como se llega (self check-in), que hay a 5 minutos andando y normas claras.`,
+      texto: `Descripción de ${descripcionLen} caracteres. Las que convierten superan los 900 y responden a: para quién es, qué tiene cada estancia, cómo se llega (self check-in), qué hay a 5 minutos andando y normas claras.`,
     });
   }
   const NOMBRE_SECCION: Record<string, string> = {
     space: "El espacio",
-    access: "Acceso de huespedes",
+    access: "Acceso de huéspedes",
     neighborhood: "El barrio",
   };
   const secciones = ["space", "access", "neighborhood"].filter((k) => !str(desc[k]));
@@ -203,18 +204,18 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: "info",
       area: "descripcion",
-      texto: `Faltan secciones en Guesty: ${secciones.map((s) => NOMBRE_SECCION[s]).join(", ")}. Airbnb las muestra como bloques separados y mejoran ranking y conversion.`,
+      texto: `Faltan secciones en Guesty: ${secciones.map((s) => NOMBRE_SECCION[s]).join(", ")}. Airbnb las muestra como bloques separados y mejoran ranking y conversión.`,
     });
   }
   if (!/licen|vut|registro|vft|cr\/|vt-|\bL\d{2,}/i.test(textoDesc)) {
     h.push({
       tono: "alerta",
       area: "descripcion",
-      texto: "No aparece el numero de licencia turistica en la descripcion: obligatorio en Andalucia y las plataformas lo exigen (y lo usan para no ocultar el anuncio).",
+      texto: "No aparece el número de licencia turística en la descripción: obligatorio en Andalucía y las plataformas lo exigen (y lo usan para no ocultar el anuncio).",
     });
   }
   if (!/wifi|wi-fi|fibra|mbps/i.test(textoDesc)) {
-    h.push({ tono: "info", area: "descripcion", texto: "Menciona el wifi (velocidad en Mbps) y el espacio de trabajo: es el filtro mas usado por nomadas y estancias de semana." });
+    h.push({ tono: "info", area: "descripcion", texto: "Menciona el wifi (velocidad en Mbps) y el espacio de trabajo: es el filtro más usado por nómadas y estancias de semana." });
   }
 
   // Amenities clave (25)
@@ -227,7 +228,7 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: importantes.length > 0 ? "alerta" : "info",
       area: "amenities",
-      texto: `Amenities sin marcar: ${faltanAmenities.join(", ")}. Si el piso las tiene, marcarlas es gratis y filtra busquedas (Airbnb no te muestra si el huesped filtra por ellas).`,
+      texto: `Amenities sin marcar: ${faltanAmenities.join(", ")}. Si el piso las tiene, marcarlas es gratis y filtra búsquedas (Airbnb no te muestra si el huésped filtra por ellas).`,
     });
   }
 
@@ -239,14 +240,14 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: "info",
       area: "terminos",
-      texto: `Estancia minima de ${minNoches} noches: cierra el paso a escapadas y huecos. Usa minimo 2 en temporada alta y 1 noche en huecos (reglas de estancia por fecha en PriceLabs o Guesty).`,
+      texto: `Estancia mínima de ${minNoches} noches: cierra el paso a escapadas y huecos. Usa mínimo 2 en temporada alta y 1 noche en huecos (reglas de estancia por fecha en PriceLabs o Guesty).`,
     });
   }
   if (cancelacion && /strict|estricta|super_strict/i.test(cancelacion)) {
     h.push({
       tono: "info",
       area: "terminos",
-      texto: `Politica de cancelacion "${cancelacion}": las flexibles/moderadas convierten mejor y Airbnb las favorece en ranking; compensa con precio no reembolsable con descuento.`,
+      texto: `Política de cancelación "${cancelacion}": las flexibles/moderadas convierten mejor y Airbnb las favorece en ranking; compensa con precio no reembolsable con descuento.`,
     });
   }
 
@@ -258,7 +259,7 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: "info",
       area: "reviews",
-      texto: `${i.reviewsTotal} reviews en total: por debajo de 10 el anuncio compite en desventaja. Pide la valoracion con un mensaje al checkout y ofrece algo a cambio (guia de la zona, late checkout cuando se pueda).`,
+      texto: `${i.reviewsTotal} reviews en total: por debajo de 10 el anuncio compite en desventaja. Pide la valoración con un mensaje al checkout y ofrece algo a cambio (guía de la zona, late checkout cuando se pueda).`,
     });
   }
 
@@ -280,14 +281,14 @@ export function auditarAnuncio(i: AuditoriaInput): AuditoriaAnuncio {
     h.push({
       tono: "info",
       area: "tarifas",
-      texto: "Sin descuento semanal ni mensual: en baja temporada un 5-10% semanal y 15-25% mensual rellena noches entre semana y reduce limpiezas (mas margen por noche).",
+      texto: "Sin descuento semanal ni mensual: en baja temporada un 5-10% semanal y 15-25% mensual rellena noches entre semana y reduce limpiezas (más margen por noche).",
     });
   }
   if (precioBase !== null && i.adrTTM !== null && precioBase > i.adrTTM * 1.6) {
     h.push({
       tono: "info",
       area: "tarifas",
-      texto: `Precio base en Guesty (${eur0(precioBase)}) muy por encima del ADR real (${eur0(i.adrTTM)}): si no hay pricing dinamico activo en todas las fechas, las fechas sin regla salen caras y no se venden.`,
+      texto: `Precio base en Guesty (${eur0(precioBase)}) muy por encima del ADR real (${eur0(i.adrTTM)}): si no hay pricing dinámico activo en todas las fechas, las fechas sin regla salen caras y no se venden.`,
     });
   }
 

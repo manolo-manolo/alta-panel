@@ -204,16 +204,16 @@ export async function cargarCostes(
 
     let unidadCanonica = unidad;
     if (!esMesValido(mes)) problemas.push("mes invalido (formato YYYY-MM)");
-    if (!unidad) problemas.push("unidad vacia");
+    if (!unidad) problemas.push("unidad vacía");
     else if (resolver) {
       const c = resolver.get(normalizarNombre(unidad));
       if (!c) problemas.push(`unidad "${unidad}" no coincide con ninguna unidad`);
       else unidadCanonica = c;
     }
     if (!mapeo.categoria) {
-      problemas.push(`categoria no reconocida "${rec["categoria"]}"`);
+      problemas.push(`categoría no reconocida "${rec["categoria"]}"`);
     }
-    if (importe === null) problemas.push("importe_eur no es un numero");
+    if (importe === null) problemas.push("importe_eur no es un número");
 
     if (problemas.length) {
       errores.push({ hoja: "Costes", fila, error: problemas.join("; "), valores: rec });
@@ -280,7 +280,7 @@ export async function cargarUnidades(
     const fecha = rec["fecha_inicio"];
 
     let unidadCanonica = unidad;
-    if (!unidad) problemas.push("unidad vacia");
+    if (!unidad) problemas.push("unidad vacía");
     else if (resolver) {
       const c = resolver.get(normalizarNombre(unidad));
       if (!c) problemas.push(`unidad "${unidad}" no coincide con ninguna unidad`);

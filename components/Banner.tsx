@@ -1,3 +1,4 @@
+import { CircleAlert, TriangleAlert } from "lucide-react";
 import type { EstadoDatos } from "@/lib/metrics";
 import type { FilaError } from "@/lib/sheets";
 import { fechaHora } from "@/lib/format";
@@ -15,21 +16,24 @@ export default function Banner({ estado }: { estado: EstadoDatos }) {
   return (
     <div className="flex flex-col gap-2">
       {syncFallido && (
-        <div className="rounded-lg border border-bad/30 bg-bad-soft px-4 py-2.5 text-sm text-bad">
-          La ultima sincronizacion fallo el {fechaHora(log?.finished_at)}. Se
-          muestran los ultimos datos correctos.
-          {log?.message ? (
-            <span className="block text-xs opacity-80">{log.message}</span>
-          ) : null}
+        <div className="flex gap-3 rounded-xl border border-bad/25 bg-bad-soft px-4 py-3 text-sm text-bad">
+          <CircleAlert size={18} className="mt-px shrink-0" aria-hidden />
+          <div>
+            <p className="font-medium">
+              La última sincronización falló el {fechaHora(log?.finished_at)}. Se muestran los
+              últimos datos correctos.
+            </p>
+            {log?.message ? <p className="mt-0.5 text-xs opacity-80">{log.message}</p> : null}
+          </div>
         </div>
       )}
       {errores.length > 0 && (
-        <details className="rounded-lg border border-warn/30 bg-warn-soft px-4 py-2.5 text-sm text-warn">
-          <summary className="cursor-pointer font-medium">
-            {errores.length} fila{errores.length === 1 ? "" : "s"} con errores en
-            la hoja de costes
+        <details className="rounded-xl border border-warn/25 bg-warn-soft px-4 py-3 text-sm text-warn">
+          <summary className="flex cursor-pointer items-center gap-2 font-medium">
+            <TriangleAlert size={16} className="shrink-0" aria-hidden />
+            {errores.length} fila{errores.length === 1 ? "" : "s"} con errores en la hoja de costes
           </summary>
-          <ul className="mt-2 space-y-1 text-xs">
+          <ul className="mt-2 space-y-1 pl-6 text-xs">
             {errores.slice(0, 50).map((e, i) => (
               <li key={i}>
                 <span className="font-medium">

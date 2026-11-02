@@ -127,41 +127,41 @@ export function lecturaCaja(t: TotalesCaja, equity: number, esUnidad: boolean): 
   if (dscr !== null && dscr < 1.2) {
     out.push({
       tono: "alerta",
-      texto: `DSCR TTM de ${dscr.toFixed(2)}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o mas). Sube NOI o alarga plazo antes de apalancar mas.`,
+      texto: `DSCR TTM de ${dscr.toFixed(2).replace(".", ",")}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o más). Sube NOI o alarga plazo antes de apalancar más.`,
     });
   } else if (dscr !== null && dscr >= 1.5) {
     out.push({
       tono: "bueno",
-      texto: `DSCR TTM de ${dscr.toFixed(2)}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
+      texto: `DSCR TTM de ${dscr.toFixed(2).replace(".", ",")}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
     });
   }
   if (t.caja < 0) {
     out.push({
       tono: "alerta",
-      texto: `Caja neta TTM negativa (${eur(t.caja)}): tras overhead y deuda el negocio consume caja. Mira que linea pesa mas: overhead ${eur(t.overhead)}, intereses ${eur(t.intereses)}, principal ${eur(t.principal)}.`,
+      texto: `Caja neta TTM negativa (${eur(t.caja)}): tras overhead y deuda el negocio consume caja. Mira qué línea pesa más: overhead ${eur(t.overhead)}, intereses ${eur(t.intereses)}, principal ${eur(t.principal)}.`,
     });
   } else if (t.caja > 0 && t.ing > 0) {
     out.push({
       tono: "bueno",
-      texto: `Generacion de caja TTM de ${eur(t.caja)} (${pct(t.caja / t.ing)} de los ingresos), ya descontados overhead, intereses y amortizacion. La amortizacion (${eur(t.principal)}) ademas construye patrimonio: no es gasto perdido.`,
+      texto: `Generación de caja TTM de ${eur(t.caja)} (${pct(t.caja / t.ing)} de los ingresos), ya descontados overhead, intereses y amortización. La amortización (${eur(t.principal)}) además construye patrimonio: no es gasto perdido.`,
     });
   }
   if (t.noi > 0 && t.overhead / t.noi >= 0.35) {
     out.push({
       tono: "alerta",
-      texto: `El overhead corporativo se come el ${pct(t.overhead / t.noi)} del NOI${esUnidad ? " asignado a esta unidad" : ""}. A este tamano de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
+      texto: `El overhead corporativo se come el ${pct(t.overhead / t.noi)} del NOI${esUnidad ? " asignado a esta unidad" : ""}. A este tamaño de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
     });
   }
   if (cashOnCash !== null) {
     out.push({
       tono: cashOnCash >= 8 ? "bueno" : "info",
-      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisicion menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
+      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisición menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
     });
   }
   if (servicio === 0 && esUnidad) {
     out.push({
       tono: "info",
-      texto: "Esta unidad no lleva deuda: su financiacion es la renta del master lease, ya incluida en costes fijos.",
+      texto: "Esta unidad no lleva deuda: su financiación es la renta del master lease, ya incluida en costes fijos.",
     });
   }
   return out;

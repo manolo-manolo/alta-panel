@@ -15,41 +15,53 @@ export interface MesForward {
 
 export default function ForwardMeses({ filas }: { filas: MesForward[] }) {
   if (filas.length === 0) {
-    return <p className="text-sm text-faint">Sin datos de meses futuros.</p>;
+    return <p className="text-sm text-muted">Sin datos de meses futuros.</p>;
   }
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[560px] border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-line text-xs text-faint">
-            <th className="px-2 py-2 text-left font-medium">Mes</th>
-            <th className="px-2 py-2 text-right font-medium">Ocupacion OTB</th>
-            <th className="px-2 py-2 text-right font-medium">ADR OTB</th>
-            <th className="px-2 py-2 text-right font-medium">RevPAR OTB</th>
-            <th className="px-2 py-2 text-right font-medium">Noches</th>
-            <th className="px-2 py-2 text-right font-medium">Revenue OTB</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filas.map((f) => (
-            <tr key={f.mes} className="border-b border-line/60">
-              <td className="px-2 py-2 text-left font-medium capitalize text-ink">
-                {mesLabel(f.mes)}
-              </td>
-              <td className="px-2 py-2 text-right text-ink">{pct(f.occ)}</td>
-              <td className="px-2 py-2 text-right text-ink">{eur(f.adr)}</td>
-              <td className="px-2 py-2 text-right text-muted">{eur(f.revpar)}</td>
-              <td className="px-2 py-2 text-right text-muted">
-                {num(f.noches)}/{num(f.disponibles)}
-              </td>
-              <td className="px-2 py-2 text-right text-ink">{eur(f.revenue)}</td>
+    <div>
+      <div className="scroll-x">
+        <table className="data-table min-w-[520px]">
+          <thead>
+            <tr>
+              <th className="col-fija px-3 py-2 text-left">Mes</th>
+              <th className="px-3 py-2 text-left">Ocupación reservada</th>
+              <th className="px-3 py-2 text-right">ADR</th>
+              <th className="px-3 py-2 text-right">RevPAR</th>
+              <th className="px-3 py-2 text-right">Noches</th>
+              <th className="px-3 py-2 text-right">Revenue</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filas.map((f) => (
+              <tr key={f.mes}>
+                <td className="col-fija px-3 py-2 text-left font-medium whitespace-nowrap capitalize">
+                  {mesLabel(f.mes)}
+                </td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-1.5 w-14 shrink-0 rounded-full bg-surface-3 sm:w-24" aria-hidden>
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${Math.min(1, f.occ ?? 0) * 100}%` }}
+                      />
+                    </div>
+                    <span className="tabular w-12 text-right">{pct(f.occ)}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right">{eur(f.adr)}</td>
+                <td className="px-3 py-2 text-right text-muted">{eur(f.revpar)}</td>
+                <td className="px-3 py-2 text-right whitespace-nowrap text-muted">
+                  {num(f.noches)}/{num(f.disponibles)}
+                </td>
+                <td className="px-3 py-2 text-right font-medium whitespace-nowrap">{eur(f.revenue)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="mt-2 text-xs text-faint">
-        Reservas ya confirmadas para cada mes. Usa el selector de mes de arriba para
-        navegar a un mes futuro y ver su detalle completo.
+        Reservas ya confirmadas para cada mes. Navega a un mes futuro con el selector de mes para
+        ver su detalle.
       </p>
     </div>
   );

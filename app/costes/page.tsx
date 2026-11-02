@@ -1,8 +1,7 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
+import AppShell from "@/components/shell/AppShell";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, KpiCard, SectionTitle, MiniStat } from "@/components/ui";
+import { Card, CardHeader, KpiCard, StatGrid } from "@/components/ui";
 import Insights from "@/components/Insights";
 import CostChart, { type PuntoCoste } from "@/components/charts/CostChart";
 import CostMatrix, { type FilaCoste } from "@/components/CostMatrix";
@@ -14,7 +13,7 @@ import {
   type CosteUnidadResumen,
 } from "@/lib/cost-insights";
 import { CATEGORIAS } from "@/lib/config";
-import { eur, pct, mesLabel, delta } from "@/lib/format";
+import { eur, pct, delta } from "@/lib/format";
 import {
   getUnidades,
   unidadMesMap,
@@ -60,17 +59,16 @@ export default async function CostesPage({
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return (
-      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
-        <SetupNotice titulo="Base de datos no disponible" detalle={`Detalle tecnico: ${msg}`} />
-      </Shell>
+      <AppShell titulo="Costes" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Base de datos no disponible" detalle={`Detalle técnico: ${msg}`} />
+      </AppShell>
     );
   }
   if (unidades.length === 0) {
     return (
-      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
-        <Banner estado={estado} />
-        <SetupNotice titulo="Todavia no hay unidades sincronizadas" />
-      </Shell>
+      <AppShell titulo="Costes" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Todavía no hay unidades sincronizadas" />
+      </AppShell>
     );
   }
 
@@ -227,32 +225,29 @@ export default async function CostesPage({
   const etiqueta = etiquetaPeriodo(mes, periodo);
 
   return (
-    <Shell mes={mes} periodo={periodo} unidades={unidades} ultima={estado.ultimoExito}>
-      <Banner estado={estado} />
-
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-ink">
-          Costes{" "}
-          <span className="text-muted">
-            · {etiqueta} ({mesLabel(mes)})
-          </span>
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+    <AppShell
+      titulo="Costes"
+      subtitulo={`Opex de la cartera · ${etiqueta}`}
+      contexto={{ mes, periodo }}
+      estado={estado}
+    >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
         <KpiCard
           label="Opex total"
           value={eur(opex(rAct))}
+          invertido
           deltaMoM={esMes ? delta(opex(rAct), opex(rPrev)) : undefined}
           deltaYoY={delta(opex(rAct), opex(rPrior))}
         />
-        <KpiCard label="Costes fijos" value={eur(rAct.costesFijos)}
+        <KpiCard label="Costes fijos" value={eur(rAct.costesFijos)} invertido
+          sub={opex(rAct) > 0 ? `${pct(rAct.costesFijos / opex(rAct), 0)} del opex` : undefined}
           deltaYoY={delta(rAct.costesFijos, rPrior.costesFijos)} />
-        <KpiCard label="Costes variables" value={eur(rAct.costesVariables)}
+        <KpiCard label="Costes variables" value={eur(rAct.costesVariables)} invertido
           deltaYoY={delta(rAct.costesVariables, rPrior.costesVariables)} />
-        <KpiCard label="% de ingresos netos" value={pct(ratioDe(rAct))}
+        <KpiCard label="Opex sobre ingresos netos" value={pct(ratioDe(rAct))} invertido
           deltaYoY={delta(ratioDe(rAct), ratioDe(rPrior))} />
-        <KpiCard label="Coste por noche vendida" value={eur(porNoche(rAct))}
+        <KpiCard label="Coste por noche vendida" value={eur(porNoche(rAct))} invertido
+          sub={rAct.disponibles > 0 ? `${eur(opex(rAct) / rAct.disponibles)} por noche disponible` : undefined}
           deltaYoY={delta(porNoche(rAct), porNoche(rPrior))} />
         <KpiCard label="NOI resultante" value={eur(rAct.noi)}
           deltaYoY={delta(rAct.noi, rPrior.noi)} />
@@ -260,64 +255,50 @@ export default async function CostesPage({
 
       {insights.length > 0 && (
         <Card>
-          <SectionTitle>Consejos de costes</SectionTitle>
+          <CardHeader titulo="Consejos de costes" descripcion="Dónde se va el margen y qué hacer" />
           <Insights insights={insights} />
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <SectionTitle>Evolucion de costes (ultimos 12 meses)</SectionTitle>
+          <CardHeader
+            titulo="Evolución de costes"
+            descripcion="Fijos y variables, y su peso sobre los ingresos netos · últimos 12 meses"
+          />
           <CostChart data={chartData} />
         </Card>
         <Card>
-          <SectionTitle>Por categoria y concepto · {etiqueta}</SectionTitle>
+          <CardHeader titulo="Por categoría y concepto" descripcion={etiqueta} />
           <OpexDetalle categorias={catsAct} />
         </Card>
       </div>
 
       <Card>
-        <SectionTitle>Costes por unidad y categoria · {etiqueta}</SectionTitle>
+        <CardHeader titulo="Costes por unidad y categoría" descripcion={etiqueta} />
         <CostMatrix filas={filas} total={totalFila} categorias={categoriasConDatos} mes={mes} />
       </Card>
 
-      <Card>
-        <SectionTitle>Variaciones vs mismo periodo del ano pasado</SectionTitle>
-        <CostMovers movers={movers} />
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStat label="Coste por noche disponible" value={eur(rAct.disponibles > 0 ? opex(rAct) / rAct.disponibles : null)} />
-        <MiniStat label="Fijos / opex" value={pct(opex(rAct) > 0 ? rAct.costesFijos / opex(rAct) : null)} />
-        <MiniStat label="Limpieza cobrada" value={eur(rAct.limpieza)} />
-        <MiniStat label="Limpieza pagada" value={eur(totalFila.valores["limpieza_extra"] ?? 0)} />
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader titulo="Variaciones" descripcion="Frente al mismo periodo del año pasado" />
+          <CostMovers movers={movers} />
+        </Card>
+        <div className="flex flex-col gap-3">
+          <StatGrid
+            className="sm:grid-cols-2"
+            items={[
+              { label: "Limpieza cobrada", value: eur(rAct.limpieza) },
+              { label: "Limpieza pagada", value: eur(totalFila.valores["limpieza_extra"] ?? 0) },
+              { label: "Fijos sobre opex", value: pct(opex(rAct) > 0 ? rAct.costesFijos / opex(rAct) : null) },
+              {
+                label: "Coste por noche disponible",
+                value: eur(rAct.disponibles > 0 ? opex(rAct) / rAct.disponibles : null),
+              },
+            ]}
+          />
+        </div>
       </div>
-    </Shell>
-  );
-}
-
-function Shell({
-  mes,
-  periodo,
-  unidades,
-  ultima,
-  children,
-}: {
-  mes: string;
-  periodo: string;
-  unidades: { listingId: string; displayName: string }[];
-  ultima: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo={periodo}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={ultima}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">{children}</main>
-    </div>
+    </AppShell>
   );
 }

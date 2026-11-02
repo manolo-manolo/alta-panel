@@ -1,7 +1,6 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
-import { Card, KpiCard, SectionTitle, MiniStat } from "@/components/ui";
+import AppShell from "@/components/shell/AppShell";
+import { Card, KpiCard, SectionTitle } from "@/components/ui";
 import Insights from "@/components/Insights";
 import VisitorsChart from "@/components/charts/VisitorsChart";
 import {
@@ -175,36 +174,27 @@ export default async function WebPage() {
   const sinConfigurar = !config.ga4 && !config.gsc;
 
   return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo="mes"
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={estado.ultimoExito}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        <Banner estado={estado} />
-
-        <div className="flex items-baseline justify-between">
-          <h1 className="text-lg font-semibold text-ink">
-            Web <span className="text-muted">· ultimos {DIAS} dias (grafico: {DIAS_SERIE})</span>
-          </h1>
-        </div>
+    <AppShell
+      titulo="Web"
+      subtitulo={`Visitantes, páginas y conversión a reserva directa · últimos ${DIAS} días`}
+      estado={estado}
+      mes={mes}
+    >
 
         {sinConfigurar && <GuiaConexion />}
         {errorGa4 && (
           <Card>
-            <SectionTitle>Google Analytics: error de conexion</SectionTitle>
+            <SectionTitle>Google Analytics: error de conexión</SectionTitle>
             <p className="text-sm text-bad">{errorGa4}</p>
             <p className="mt-1 text-xs text-muted">
               Revisa GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_KEY / GA4_PROPERTY_ID
-              y que la service account este anadida a la propiedad de GA4 como lectora.
+              y que la service account esté añadida a la propiedad de GA4 como lectora.
             </p>
           </Card>
         )}
         {errorGsc && (
           <Card>
-            <SectionTitle>Search Console: error de conexion</SectionTitle>
+            <SectionTitle>Search Console: error de conexión</SectionTitle>
             <p className="text-sm text-bad">{errorGsc}</p>
             <p className="mt-1 text-xs text-muted">
               Revisa GSC_SITE_URL (formato exacto de la propiedad, p. ej.
@@ -218,7 +208,7 @@ export default async function WebPage() {
             <KpiCard label="Visitantes" value={ga4 ? num(ga4.totales.visitantes) : "-"}
               deltaMoM={ga4 ? delta(ga4.totales.visitantes, ga4.totales.visitantesPrev) : undefined}
               etiquetaMoM="vs 28d ant." />
-            <KpiCard label="Vistas de pagina" value={ga4 ? num(ga4.totales.vistas) : "-"}
+            <KpiCard label="Vistas de página" value={ga4 ? num(ga4.totales.vistas) : "-"}
               deltaMoM={ga4 ? delta(ga4.totales.vistas, ga4.totales.vistasPrev) : undefined}
               etiquetaMoM="vs 28d ant." />
             <KpiCard label="Vistas de apartamentos" value={ga4 ? num(vistasFichas) : "-"} />
@@ -226,7 +216,7 @@ export default async function WebPage() {
               deltaMoM={delta(directas.creadas, directas.creadasPrev)}
               etiquetaMoM="vs 28d ant." />
             <KpiCard label="Revenue directo" value={eur(directas.revenue)} />
-            <KpiCard label="Conversion a directa" value={conversion !== null ? pct(conversion) : "-"} />
+            <KpiCard label="Conversión a directa" value={conversion !== null ? pct(conversion) : "-"} />
           </div>
         )}
 
@@ -240,7 +230,7 @@ export default async function WebPage() {
         {ga4 && (
           <>
             <Card>
-              <SectionTitle>Evolucion de visitantes</SectionTitle>
+              <SectionTitle>Evolución de visitantes</SectionTitle>
               <VisitorsChart
                 data={ga4.serie.map((p) => ({ fecha: p.fecha, a: p.visitantes, b: p.vistas }))}
                 labelA="Visitantes"
@@ -250,16 +240,16 @@ export default async function WebPage() {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               <Card className="lg:col-span-2">
-                <SectionTitle>Paginas mas visitadas</SectionTitle>
+                <SectionTitle>Páginas más visitadas</SectionTitle>
                 <TablaPaginas paginas={ga4.paginas.slice(0, 12)} nombres={nombres} />
               </Card>
               <div className="flex flex-col gap-4">
                 <Card>
-                  <SectionTitle>Fuentes de trafico</SectionTitle>
+                  <SectionTitle>Fuentes de tráfico</SectionTitle>
                   <TablaDim items={ga4.canales} total={totalSesiones} usarSesiones />
                 </Card>
                 <Card>
-                  <SectionTitle>Paises</SectionTitle>
+                  <SectionTitle>Países</SectionTitle>
                   <TablaDim items={ga4.paises.slice(0, 6)} total={ga4.paises.reduce((s, x) => s + x.visitantes, 0)} />
                 </Card>
                 <Card>
@@ -270,23 +260,25 @@ export default async function WebPage() {
             </div>
 
             <Card>
-              <SectionTitle>Funnel de reserva (ultimos {DIAS} dias)</SectionTitle>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <MiniStat label="1 · Visitantes" value={num(ga4.totales.visitantes)} />
-                <MiniStat label="2 · Vistas de apartamentos" value={num(vistasFichas)} />
-                <MiniStat
-                  label="3 · Eventos de reserva/OTA"
-                  value={eventosReserva.length ? num(eventosReserva.reduce((s, e) => s + e.conteo, 0)) : "sin eventos"}
-                />
-                <MiniStat label="4 · Reservas directas" value={`${num(directas.creadas)} (${eur(directas.revenue)})`} />
-              </div>
+              <SectionTitle>Funnel de reserva (últimos {DIAS} días)</SectionTitle>
+              <Funnel
+                pasos={[
+                  { label: "Visitantes", valor: ga4.totales.visitantes },
+                  { label: "Vistas de apartamentos", valor: vistasFichas },
+                  {
+                    label: "Eventos de reserva o clic a OTA",
+                    valor: eventosReserva.length ? eventosReserva.reduce((s, e) => s + e.conteo, 0) : null,
+                  },
+                  { label: `Reservas directas (${eur(directas.revenue)})`, valor: directas.creadas },
+                ]}
+              />
               {eventosReserva.length > 0 && (
                 <p className="mt-2 text-xs text-muted">
                   Eventos detectados: {eventosReserva.map((e) => `${e.nombre} (${num(e.conteo)})`).join(" · ")}
                 </p>
               )}
               <p className="mt-2 text-xs text-faint">
-                Las reservas directas vienen de Guesty (canal directo, por fecha de creacion), asi
+                Las reservas directas vienen de Guesty (canal directo, por fecha de creación), así
                 que el paso 4 es real aunque falten eventos en GA4. Los clics de salida a
                 Airbnb/Booking solo se pueden medir con un evento de GA4 en esos enlaces.
               </p>
@@ -306,32 +298,63 @@ export default async function WebPage() {
               />
             </Card>
             <Card>
-              <SectionTitle>Busquedas que traen visitas</SectionTitle>
+              <SectionTitle>Búsquedas que traen visitas</SectionTitle>
               <TablaConsultas consultas={gsc.consultas} />
             </Card>
           </div>
         )}
-      </main>
-    </div>
+    </AppShell>
   );
 }
 
 // --- Bloques de presentacion (server components) ---
 
+function Funnel({ pasos }: { pasos: { label: string; valor: number | null }[] }) {
+  const base = pasos[0]?.valor ?? 0;
+  return (
+    <ol className="flex flex-col gap-2.5">
+      {pasos.map((p, i) => {
+        const prev = i > 0 ? pasos[i - 1].valor : null;
+        const conv = p.valor !== null && prev !== null && prev > 0 ? p.valor / prev : null;
+        const ancho = p.valor !== null && base > 0 ? Math.max(2, (p.valor / base) * 100) : 0;
+        return (
+          <li key={p.label} className="grid grid-cols-[1.5rem_1fr] items-center gap-x-3 gap-y-1 sm:grid-cols-[1.5rem_14rem_1fr]">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
+              {i + 1}
+            </span>
+            <span className="text-sm font-medium text-ink">{p.label}</span>
+            <span className="col-start-2 flex items-center gap-3 sm:col-start-3">
+              <span className="h-2.5 flex-1 rounded-full bg-surface-3" aria-hidden>
+                <span className="block h-full rounded-full bg-brand" style={{ width: `${ancho}%` }} />
+              </span>
+              <span className="tabular w-16 shrink-0 text-right text-sm font-semibold text-ink">
+                {p.valor !== null ? num(p.valor) : "sin datos"}
+              </span>
+              <span className="tabular w-14 shrink-0 text-right text-xs text-muted">
+                {conv !== null ? pct(conv) : ""}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function GuiaConexion() {
   return (
     <Card>
-      <SectionTitle>Conectar la analitica web</SectionTitle>
+      <SectionTitle>Conectar la analítica web</SectionTitle>
       <div className="flex flex-col gap-2 text-sm text-ink">
         <p>
-          Esta pestana se alimenta de Google Analytics 4 (visitantes, paginas, funnel) y de
+          Esta pestaña se alimenta de Google Analytics 4 (visitantes, páginas, funnel) y de
           Google Search Console (visibilidad en Google). Falta conectar las credenciales:
         </p>
         <ol className="ml-4 list-decimal space-y-1 text-muted">
           <li>
             Comprueba que altahomes.es tiene GA4 instalado: abre la web, clic derecho, &quot;Ver
-            codigo fuente&quot; y busca &quot;gtag&quot; o &quot;G-&quot;. Si no lo tiene, crea
-            una propiedad en analytics.google.com e instala la etiqueta (o activa la integracion
+            código fuente&quot; y busca &quot;gtag&quot; o &quot;G-&quot;. Si no lo tiene, crea
+            una propiedad en analytics.google.com e instala la etiqueta (o activa la integración
             de Google Analytics en el editor de la web).
           </li>
           <li>
@@ -339,20 +362,20 @@ function GuiaConexion() {
             las APIs &quot;Google Analytics Data API&quot; y &quot;Search Console API&quot;.
           </li>
           <li>
-            Anade el email de esa service account como lector en la propiedad de GA4 (Admin,
+            Añade el email de esa service account como lector en la propiedad de GA4 (Admin,
             Access Management) y en Search Console (Ajustes, Usuarios y permisos) de
             altahomes.es.
           </li>
           <li>
-            En Vercel anade las variables: GOOGLE_SERVICE_ACCOUNT_EMAIL,
-            GOOGLE_SERVICE_ACCOUNT_KEY (la private_key del JSON), GA4_PROPERTY_ID (numero de la
+            En Vercel añade las variables: GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            GOOGLE_SERVICE_ACCOUNT_KEY (la private_key del JSON), GA4_PROPERTY_ID (número de la
             propiedad) y GSC_SITE_URL (sc-domain:altahomes.es si la propiedad es de dominio, o
             https://www.altahomes.es/ si es de prefijo de URL).
           </li>
         </ol>
         <p className="text-xs text-faint">
-          Con solo GA4 ya funcionan visitantes, paginas y funnel; Search Console anade la parte
-          de busquedas en Google. Las reservas directas de Guesty se muestran igualmente.
+          Con solo GA4 ya funcionan visitantes, páginas y funnel; Search Console añade la parte
+          de búsquedas en Google. Las reservas directas de Guesty se muestran igualmente.
         </p>
       </div>
     </Card>
@@ -363,18 +386,18 @@ function TablaPaginas({ paginas, nombres }: { paginas: PaginaTop[]; nombres: str
   if (paginas.length === 0) return <p className="text-sm text-faint">Sin datos.</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[480px] border-collapse text-sm">
+      <table className="data-table min-w-[480px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
-            <th className="px-2 py-2 text-left font-medium">Pagina</th>
-            <th className="px-2 py-2 text-right font-medium">Vistas</th>
-            <th className="px-2 py-2 text-right font-medium">Visitantes</th>
+          <tr>
+            <th className="px-3 py-2.5 text-left">Página</th>
+            <th className="px-3 py-2.5 text-right">Vistas</th>
+            <th className="px-3 py-2.5 text-right">Visitantes</th>
           </tr>
         </thead>
         <tbody>
           {paginas.map((p) => (
-            <tr key={p.path} className="border-b border-line/60">
-              <td className="max-w-[360px] truncate px-2 py-2 text-left" title={`${p.titulo} · ${p.path}`}>
+            <tr key={p.path}>
+              <td className="max-w-[360px] truncate px-3 py-2 text-left" title={`${p.titulo} · ${p.path}`}>
                 <span className="text-ink">{p.path}</span>
                 {esPaginaApartamento(p.path, nombres) && (
                   <span className="ml-1.5 rounded bg-brand/10 px-1 py-0.5 text-[10px] font-medium text-brand">
@@ -382,8 +405,8 @@ function TablaPaginas({ paginas, nombres }: { paginas: PaginaTop[]; nombres: str
                   </span>
                 )}
               </td>
-              <td className="px-2 py-2 text-right text-ink">{num(p.vistas)}</td>
-              <td className="px-2 py-2 text-right text-muted">{num(p.visitantes)}</td>
+              <td className="px-3 py-2 text-right text-ink">{num(p.vistas)}</td>
+              <td className="px-3 py-2 text-right text-muted">{num(p.visitantes)}</td>
             </tr>
           ))}
         </tbody>
@@ -429,24 +452,24 @@ function TablaConsultas({ consultas }: { consultas: GscConsulta[] }) {
   if (consultas.length === 0) return <p className="text-sm text-faint">Sin datos.</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="tabular w-full border-collapse text-sm">
+      <table className="data-table">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
-            <th className="px-2 py-2 text-left font-medium">Busqueda</th>
-            <th className="px-2 py-2 text-right font-medium">Clicks</th>
-            <th className="px-2 py-2 text-right font-medium">Impr.</th>
-            <th className="px-2 py-2 text-right font-medium">Pos.</th>
+          <tr>
+            <th className="px-3 py-2.5 text-left">Búsqueda</th>
+            <th className="px-3 py-2.5 text-right">Clicks</th>
+            <th className="px-3 py-2.5 text-right">Impr.</th>
+            <th className="px-3 py-2.5 text-right">Pos.</th>
           </tr>
         </thead>
         <tbody>
           {consultas.map((c) => (
-            <tr key={c.consulta} className="border-b border-line/60">
-              <td className="max-w-[200px] truncate px-2 py-2 text-left text-ink" title={c.consulta}>
+            <tr key={c.consulta}>
+              <td className="max-w-[200px] truncate px-3 py-2 text-left text-ink" title={c.consulta}>
                 {c.consulta}
               </td>
-              <td className="px-2 py-2 text-right text-ink">{num(c.clicks)}</td>
-              <td className="px-2 py-2 text-right text-muted">{num(c.impresiones)}</td>
-              <td className="px-2 py-2 text-right text-muted">{c.posicion.toFixed(1)}</td>
+              <td className="px-3 py-2 text-right text-ink">{num(c.clicks)}</td>
+              <td className="px-3 py-2 text-right text-muted">{num(c.impresiones)}</td>
+              <td className="px-3 py-2 text-right text-muted">{c.posicion.toFixed(1)}</td>
             </tr>
           ))}
         </tbody>

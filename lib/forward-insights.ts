@@ -68,12 +68,12 @@ export function generarInsightsForward(
       const pickupLY = Math.max(0, v30.nochesLY - v30.nochesSTLY);
       alertas.push({
         tono: "alerta",
-        texto: `Ritmo a 30 dias por detras del ano pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} menos). El ano pasado esa ventana cerro al ${v30.occLY !== null ? pct0(v30.occLY) : "n/d"} con ${pickupLY} noches de recogida tardia. No bajes precio en bloque: mira en las acciones por unidad que pisos y meses van por detras y si es precio o visibilidad.`,
+        texto: `Ritmo a 30 días por detrás del año pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} menos). El año pasado esa ventana cerró al ${v30.occLY !== null ? pct0(v30.occLY) : "n/d"} con ${pickupLY} noches de recogida tardia. No bajes precio en bloque: mira en las acciones por unidad qué pisos y meses van por detrás y si es precio o visibilidad.`,
       });
     } else if (diff >= 0.05) {
       buenas.push({
         tono: "bueno",
-        texto: `Ritmo a 30 dias por delante del ano pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} mas).`,
+        texto: `Ritmo a 30 días por delante del año pasado: ${pct0(v30.occ)} OTB vs ${pct0(v30.occSTLY)} en el mismo punto (${pts(diff)} más).`,
       });
     }
   }
@@ -92,12 +92,12 @@ export function generarInsightsForward(
     if (adrDiff >= 0.1 && occDiff <= -0.05) {
       alertas.push({
         tono: "alerta",
-        texto: `El ADR a 30 dias va ${pct0(adrDiff)} por encima del ano pasado (${eur0(v30.adr)} vs ${eur0(v30.adrSTLY)}) pero la ocupacion va por detras: el precio puede estar frenando la demanda. Prueba bajadas selectivas en fechas con poca cartera.`,
+        texto: `El ADR a 30 días va ${pct0(adrDiff)} por encima del año pasado (${eur0(v30.adr)} vs ${eur0(v30.adrSTLY)}) pero la ocupación va por detrás: el precio puede estar frenando la demanda. Prueba bajadas selectivas en fechas con poca cartera.`,
       });
     } else if (adrDiff <= -0.05 && occDiff >= 0.05) {
       info.push({
         tono: "info",
-        texto: `Se esta vendiendo mas barato que el ano pasado a 30 dias (ADR ${eur0(v30.adr)} vs ${eur0(v30.adrSTLY)}) con la ocupacion por delante: hay margen para subir tarifas en las fechas que quedan libres.`,
+        texto: `Se está vendiendo más barato que el año pasado a 30 días (ADR ${eur0(v30.adr)} vs ${eur0(v30.adrSTLY)}) con la ocupación por delante: hay margen para subir tarifas en las fechas que quedan libres.`,
       });
     }
   }
@@ -112,7 +112,7 @@ export function generarInsightsForward(
       const valor = v15.adr !== null ? ` (~${eur0(libres * v15.adr)} al ADR actual)` : "";
       alertas.push({
         tono: "alerta",
-        texto: `Ventana critica: ${sujeto} tiene ${libres} noche${libres === 1 ? "" : "s"} sin vender en los proximos 15 dias${valor} y la recogida tipica del ano pasado no basta para cerrarla (proyeccion ${v15.occProy !== null ? pct0(v15.occProy) : pct0(occ15)} vs cierre LY ${v15.occLY !== null ? pct0(v15.occLY) : "n/d"}). Descuento last minute escalonado y estancia minima de 1 noche en huecos.`,
+        texto: `Ventana crítica: ${sujeto} tiene ${libres} noche${libres === 1 ? "" : "s"} sin vender en los próximos 15 días${valor} y la recogida típica del año pasado no basta para cerrarla (proyección ${v15.occProy !== null ? pct0(v15.occProy) : pct0(occ15)} vs cierre LY ${v15.occLY !== null ? pct0(v15.occLY) : "n/d"}). Descuento last minute escalonado y estancia mínima de 1 noche en huecos.`,
       });
     }
   }
@@ -123,7 +123,7 @@ export function generarInsightsForward(
     if (diff >= 0.08) {
       buenas.push({
         tono: "bueno",
-        texto: `Demanda adelantada fuerte: a 90 dias la ocupacion OTB (${pct0(v90.occ)}) va ${pts(diff)} por encima del mismo punto del ano pasado. Sube tarifas en los picos de demanda antes de quedarte sin inventario barato.`,
+        texto: `Demanda adelantada fuerte: a 90 días la ocupación OTB (${pct0(v90.occ)}) va ${pts(diff)} por encima del mismo punto del año pasado. Sube tarifas en los picos de demanda antes de quedarte sin inventario barato.`,
       });
     }
   }
@@ -137,7 +137,7 @@ export function generarInsightsForward(
     if (vacias.length) {
       alertas.push({
         tono: "alerta",
-        texto: `Sin reservas en los proximos 30 dias: ${vacias.map((u) => u.nombre).join(", ")}. Revisa precio, fotos, minimos y que el anuncio este activo en todos los canales.`,
+        texto: `Sin reservas en los próximos 30 días: ${vacias.map((u) => u.nombre).join(", ")}. Revisa precio, fotos, mínimos y que el anuncio este activo en todos los canales.`,
       });
     }
 
@@ -160,7 +160,7 @@ export function generarInsightsForward(
       if (rezagadas.length) {
         alertas.push({
           tono: "alerta",
-          texto: `Muy por debajo de la media OTB a 30 dias (${pct0(v30.occ)}): ${rezagadas.join(", ")}. Son las primeras candidatas a ajuste de precio o promocion.`,
+          texto: `Muy por debajo de la media OTB a 30 días (${pct0(v30.occ)}): ${rezagadas.join(", ")}. Son las primeras candidatas a ajuste de precio o promoción.`,
         });
       }
     }
@@ -172,7 +172,7 @@ export function generarInsightsForward(
     if (inventarioTotal > 0 && v30.bloqueadas / inventarioTotal >= 0.08) {
       info.push({
         tono: "info",
-        texto: `${v30.bloqueadas} noches bloqueadas en los proximos 30 dias (${pct0(v30.bloqueadas / inventarioTotal)} del inventario). Cada bloqueo evitable es RevPAR perdido: confirma que siguen siendo necesarios.`,
+        texto: `${v30.bloqueadas} noches bloqueadas en los próximos 30 días (${pct0(v30.bloqueadas / inventarioTotal)} del inventario). Cada bloqueo evitable es RevPAR perdido: confirma que siguen siendo necesarios.`,
       });
     }
   }
@@ -181,7 +181,7 @@ export function generarInsightsForward(
   if (v30 && v30.occProy !== null && v30.nochesSTLY > 0 && v30.occ !== null) {
     info.push({
       tono: "info",
-      texto: `Proyeccion a 30 dias: cierre estimado al ${pct0(v30.occProy)} de ocupacion y ~${eur0(v30.revenueProy)} de alojamiento (OTB actual mas la recogida tipica del ano pasado).`,
+      texto: `Proyección a 30 días: cierre estimado al ${pct0(v30.occProy)} de ocupación y ~${eur0(v30.revenueProy)} de alojamiento (OTB actual más la recogida típica del año pasado).`,
     });
   }
 

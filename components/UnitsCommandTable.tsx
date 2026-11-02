@@ -70,7 +70,7 @@ function Pace({ occ, stly }: { occ: number | null; stly: number | null }) {
   return (
     <span
       className={`ml-1 text-[10px] ${diff > 0 ? "text-ok" : "text-bad"}`}
-      title={`Mismo punto del ano pasado: ${pct(stly)}`}
+      title={`Mismo punto del año pasado: ${pct(stly)}`}
     >
       {diff > 0 ? "▲" : "▼"}
     </span>
@@ -104,25 +104,25 @@ export default function UnitsCommandTable({
       setDesc(key !== "nombre");
     }
   }
-  const flecha = (key: ColKey) => (sortKey === key ? (desc ? " ▼" : " ▲") : "");
+  const flecha = (key: ColKey) => (sortKey === key ? (desc ? " ↓" : " ↑") : "");
 
   const celdas = (f: FilaMando, fuerte = false) => (
     <>
-      <td className="whitespace-nowrap px-2 py-2 text-right">{pct(f.occ)}</td>
-      <td className="whitespace-nowrap px-2 py-2 text-right">{eur(f.adr)}</td>
-      <td className="whitespace-nowrap px-2 py-2 text-right text-muted">{eur(f.revpar)}</td>
-      <td className="whitespace-nowrap px-2 py-2 text-right">{eur(f.netos)}</td>
-      <td className="whitespace-nowrap px-2 py-2 text-right">{eur(f.noi)}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">{pct(f.occ)}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">{eur(f.adr)}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted">{eur(f.revpar)}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">{eur(f.netos)}</td>
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">{eur(f.noi)}</td>
       <td
-        className={`whitespace-nowrap px-2 py-2 text-right ${f.caja < 0 ? "text-bad" : fuerte ? "" : "text-ink"}`}
+        className={`whitespace-nowrap px-3 py-2.5 text-right ${f.caja < 0 ? "text-bad" : fuerte ? "" : "text-ink"}`}
       >
         {eur(f.caja)}
       </td>
       <td
-        className="whitespace-nowrap px-2 py-2 text-right"
+        className="whitespace-nowrap px-3 py-2.5 text-right"
         title={
           f.occBreakEven !== null
-            ? `Ocupacion que cubre fijos, overhead y deuda (base TTM); ocupacion TTM real: ${pct(f.occTTM)}`
+            ? `Ocupación que cubre fijos, overhead y deuda (base TTM); ocupación TTM real: ${pct(f.occTTM)}`
             : undefined
         }
       >
@@ -140,7 +140,7 @@ export default function UnitsCommandTable({
           </span>
         )}
       </td>
-      <td className="whitespace-nowrap px-2 py-2 text-right">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">
         {f.rendimiento === null ? (
           <span className="text-faint">-</span>
         ) : (
@@ -152,7 +152,7 @@ export default function UnitsCommandTable({
           </>
         )}
       </td>
-      <td className="whitespace-nowrap px-2 py-2 text-right">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right">
         {f.rating90 === null ? (
           <span className="text-faint">sin reviews</span>
         ) : (
@@ -163,8 +163,8 @@ export default function UnitsCommandTable({
         )}
       </td>
       <td
-        className="whitespace-nowrap px-2 py-2 text-right"
-        title={`${f.otbNoches} de ${f.otbDisponibles} noches vendidas para los proximos 30 dias`}
+        className="whitespace-nowrap px-3 py-2.5 text-right"
+        title={`${f.otbNoches} de ${f.otbDisponibles} noches vendidas para los próximos 30 días`}
       >
         {pct(f.otbOcc)}
         <Pace occ={f.otbOcc} stly={f.otbOccSTLY} />
@@ -173,13 +173,13 @@ export default function UnitsCommandTable({
   );
 
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[1060px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[1060px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
+          <tr>
             <th
               onClick={() => orden("nombre")}
-              className="cursor-pointer px-2 py-2 text-left font-medium hover:text-ink"
+              className="col-fija cursor-pointer px-3 py-2.5 text-left font-medium hover:text-ink"
             >
               Unidad{flecha("nombre")}
             </th>
@@ -187,7 +187,7 @@ export default function UnitsCommandTable({
               <th
                 key={c.key}
                 onClick={() => orden(c.key)}
-                className="cursor-pointer whitespace-nowrap px-2 py-2 text-right font-medium hover:text-ink"
+                className="cursor-pointer whitespace-nowrap px-3 py-2.5 text-right font-medium hover:text-ink"
               >
                 {c.label}
                 {flecha(c.key)}
@@ -202,7 +202,7 @@ export default function UnitsCommandTable({
               onClick={() => router.push(`/unidad/${f.listingId}?mes=${mes}`)}
               className="cursor-pointer border-b border-line/60 text-ink hover:bg-surface-2"
             >
-              <td className="whitespace-nowrap px-2 py-2 text-left font-medium">
+              <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left font-medium">
                 {f.nombre}
                 {f.costesPendientes && (
                   <span className="ml-1 text-warn" title="Costes pendientes de cargar">
@@ -216,16 +216,16 @@ export default function UnitsCommandTable({
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-line font-semibold text-ink">
-            <td className="px-2 py-2 text-left">{total.nombre}</td>
+            <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left">{total.nombre}</td>
             {celdas(total, true)}
           </tr>
         </tfoot>
       </table>
       <p className="mt-2 text-xs text-faint">
-        Ingresos, NOI y caja del periodo seleccionado; yield/margen sobre los ultimos 12 meses;
-        Occ b/e = ocupacion de equilibrio de caja (en rojo si la ocupacion TTM no llega); rating
-        de los ultimos 90 dias; OTB = ocupacion ya reservada para los proximos 30 dias (▲▼ vs el
-        mismo punto del ano pasado). Clic en una fila para abrir la unidad.
+        Ingresos, NOI y caja del periodo seleccionado; yield/margen sobre los últimos 12 meses;
+        Occ b/e = ocupación de equilibrio de caja (en rojo si la ocupación TTM no llega); rating
+        de los últimos 90 días; OTB = ocupación ya reservada para los próximos 30 días (▲▼ vs el
+        mismo punto del año pasado). Clic en una fila para abrir la unidad.
       </p>
     </div>
   );

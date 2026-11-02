@@ -26,7 +26,7 @@ export default function CleaningImpact({
       <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-faint">
         <span>Ingresos {eur(ingresos)}</span>
         <span>· Costes {eur(costes)}</span>
-        <span>· Comision OTA {eur(comision)}</span>
+        <span>· Comisión OTA {eur(comision)}</span>
       </div>
     </div>
   );

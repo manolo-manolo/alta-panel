@@ -107,7 +107,7 @@ export const CATEGORIA_LABEL: Record<Categoria, string> = {
   seguros: "Seguros",
   ibi_tasas: "IBI y tasas",
   mantenimiento: "Mantenimiento",
-  gestion: "Gestion",
+  gestion: "Gestión",
   marketing: "Marketing",
   otros: "Otros",
 };

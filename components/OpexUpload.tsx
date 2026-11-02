@@ -82,7 +82,7 @@ export default function OpexUpload() {
             <p className="mt-2 text-warn">Unidades sin reconocer (no cargadas): {resumen.unidadesNoReconocidas.join(", ")}</p>
           )}
           {resumen.categoriasNoMapeadas.length > 0 && (
-            <p className="mt-1 text-warn">Categorias sin mapear: {resumen.categoriasNoMapeadas.join(", ")}</p>
+            <p className="mt-1 text-warn">Categorías sin mapear: {resumen.categoriasNoMapeadas.join(", ")}</p>
           )}
         </div>
       )}

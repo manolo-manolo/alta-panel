@@ -47,12 +47,12 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
     if (v <= -0.15) {
       alertas.push({
         tono: "alerta",
-        texto: `Los visitantes caen un ${pct1(Math.abs(v))} vs los ${i.dias} dias anteriores (${num0(i.visitantes)} vs ${num0(i.visitantesPrev)}). Mira el desglose de fuentes para ver que canal se ha frenado.`,
+        texto: `Los visitantes caen un ${pct1(Math.abs(v))} vs los ${i.dias} días anteriores (${num0(i.visitantes)} vs ${num0(i.visitantesPrev)}). Mira el desglose de fuentes para ver que canal se ha frenado.`,
       });
     } else if (v >= 0.15) {
       buenas.push({
         tono: "bueno",
-        texto: `Los visitantes crecen un ${pct1(v)} vs los ${i.dias} dias anteriores (${num0(i.visitantes)} vs ${num0(i.visitantesPrev)}).`,
+        texto: `Los visitantes crecen un ${pct1(v)} vs los ${i.dias} días anteriores (${num0(i.visitantes)} vs ${num0(i.visitantesPrev)}).`,
       });
     }
   }
@@ -63,17 +63,17 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
     if (i.reservasDirectas === 0) {
       alertas.push({
         tono: "alerta",
-        texto: `${num0(i.visitantes)} visitantes en ${i.dias} dias y ninguna reserva directa. La web hace de escaparate pero no convierte: revisa que el motor de reserva funcione, que los precios esten alineados con las OTAs y que haya un boton de reserva visible en cada ficha.`,
+        texto: `${num0(i.visitantes)} visitantes en ${i.dias} días y ninguna reserva directa. La web hace de escaparate pero no convierte: revisa que el motor de reserva funcione, que los precios esten alineados con las OTAs y que haya un boton de reserva visible en cada ficha.`,
       });
     } else if (conv < 0.005) {
       info.push({
         tono: "info",
-        texto: `Conversion a reserva directa del ${pct1(conv)} (${num0(i.reservasDirectas)} reservas de ${num0(i.visitantes)} visitantes). Una web de reserva directa sana ronda el 1-3%: pequenas mejoras (precio igual o mejor que OTAs, resenas visibles, checkout en 2 pasos) tienen mucho recorrido.`,
+        texto: `Conversión a reserva directa del ${pct1(conv)} (${num0(i.reservasDirectas)} reservas de ${num0(i.visitantes)} visitantes). Una web de reserva directa sana ronda el 1-3%: pequenas mejoras (precio igual o mejor que OTAs, resenas visibles, checkout en 2 pasos) tienen mucho recorrido.`,
       });
     } else {
       buenas.push({
         tono: "bueno",
-        texto: `Conversion a reserva directa del ${pct1(conv)}: ${num0(i.reservasDirectas)} reservas (${eur0(i.revenueDirecto)}) de ${num0(i.visitantes)} visitantes en ${i.dias} dias. Cada reserva directa ahorra la comision del canal.`,
+        texto: `Conversión a reserva directa del ${pct1(conv)}: ${num0(i.reservasDirectas)} reservas (${eur0(i.revenueDirecto)}) de ${num0(i.visitantes)} visitantes en ${i.dias} días. Cada reserva directa ahorra la comisión del canal.`,
       });
     }
   }
@@ -83,9 +83,9 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
     const top = i.fichasSinConversion.slice(0, 3);
     alertas.push({
       tono: "alerta",
-      texto: `Fichas con visitas y cero reservas directas en ${i.dias} dias: ${top
+      texto: `Fichas con visitas y cero reservas directas en ${i.dias} días: ${top
         .map((p) => `${p.path} (${num0(p.vistas)} vistas)`)
-        .join(", ")}. Compara su precio con Airbnb/Booking, revisa fotos y anade urgencia (fechas libres, "ultimas noches").`,
+        .join(", ")}. Compara su precio con Airbnb/Booking, revisa fotos y añade urgencia (fechas libres, "últimas noches").`,
     });
   }
 
@@ -107,7 +107,7 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
   if (i.visitantes !== null && !tieneEventoOTA) {
     info.push({
       tono: "info",
-      texto: `No hay ningun evento de clic hacia Airbnb/Booking en GA4, asi que no se puede medir cuantos visitantes acaban reservando alli. Anade un evento (p. ej. "click_out_ota") a los enlaces salientes y esta pestana lo recogera automaticamente.`,
+      texto: `No hay ningún evento de clic hacia Airbnb/Booking en GA4, así que no se puede medir cuántos visitantes acaban reservando allí. Añade un evento (p. ej. "click_out_ota") a los enlaces salientes y esta pestana lo recogera automáticamente.`,
     });
   }
 
@@ -115,7 +115,7 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
   if (i.canalTop && i.canalTop.cuota >= 0.7) {
     info.push({
       tono: "info",
-      texto: `El ${pct1(i.canalTop.cuota)} de las sesiones llega por ${i.canalTop.nombre}. Diversificar (email a huespedes pasados, fichas de Google Business, redes) reduce el riesgo de depender de un solo canal.`,
+      texto: `El ${pct1(i.canalTop.cuota)} de las sesiones llega por ${i.canalTop.nombre}. Diversificar (email a huéspedes pasados, fichas de Google Business, redes) reduce el riesgo de depender de un solo canal.`,
     });
   }
 
@@ -124,9 +124,9 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
     const top = i.gscPaginasBajoCtr.slice(0, 2);
     info.push({
       tono: "info",
-      texto: `Paginas que Google muestra mucho pero casi nadie clica: ${top
+      texto: `Páginas que Google muestra mucho pero casi nadie clica: ${top
         .map((p) => `${p.url} (${num0(p.impresiones)} impresiones, CTR ${pct1(p.ctr)})`)
-        .join(", ")}. Mejora titulo y descripcion (precio, zona, "licencia turistica") para ganar clics gratis.`,
+        .join(", ")}. Mejora título y descripción (precio, zona, "licencia turística") para ganar clics gratis.`,
     });
   }
 
@@ -134,7 +134,7 @@ export function generarInsightsWeb(i: WebInsightInput): Insight[] {
   if (i.movilCuota !== null && i.movilCuota >= 0.6) {
     info.push({
       tono: "info",
-      texto: `El ${pct1(i.movilCuota)} de los visitantes navega en movil: prueba el proceso de reserva completo desde un telefono, ahi es donde se pierde a la mayoria.`,
+      texto: `El ${pct1(i.movilCuota)} de los visitantes navega en móvil: prueba el proceso de reserva completo desde un teléfono, ahí es donde se pierde a la mayoría.`,
     });
   }
 

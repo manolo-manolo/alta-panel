@@ -19,14 +19,14 @@ export default function CostMovers({ movers }: { movers: Movimiento[] }) {
   if (subidas.length === 0 && bajadas.length === 0) {
     return (
       <p className="text-sm text-faint">
-        Sin variaciones relevantes vs el mismo periodo del ano pasado.
+        Sin variaciones relevantes vs el mismo periodo del año pasado.
       </p>
     );
   }
 
   const bloque = (titulo: string, items: typeof subidas, color: string) => (
     <div>
-      <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-faint">{titulo}</h3>
+      <h3 className="mb-2 text-sm font-semibold text-ink">{titulo}</h3>
       {items.length === 0 ? (
         <p className="text-sm text-faint">Ninguna.</p>
       ) : (

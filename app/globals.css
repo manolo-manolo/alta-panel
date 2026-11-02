@@ -1,21 +1,33 @@
 @import "tailwindcss";
 
+/*
+ * Sistema de diseno de Alta Panel.
+ * Todos los colores de texto cumplen WCAG AA (>= 4,5:1) sobre blanco:
+ * ink > muted (7,1:1) > faint (4,9:1). brand/ok/warn/bad ~5:1.
+ */
 @theme {
-  --color-canvas: #f4f5f7;
+  --color-canvas: #f4f5f3;
   --color-surface: #ffffff;
-  --color-surface-2: #fafbfc;
-  --color-ink: #0f172a;
-  --color-muted: #64748b;
-  --color-faint: #94a3b8;
-  --color-line: #e4e7ec;
+  --color-surface-2: #f8f9f8;
+  --color-surface-3: #eff1ef;
+  --color-ink: #0f1d1c;
+  --color-muted: #4d5b59;
+  --color-faint: #667472;
+  --color-line: #e4e8e6;
+  --color-line-strong: #d2d9d6;
   --color-brand: #0d7c74;
-  --color-brand-ink: #0a5f59;
-  --color-ok: #15a34a;
-  --color-ok-soft: #dcfce7;
-  --color-warn: #d97706;
-  --color-warn-soft: #fef3c7;
-  --color-bad: #dc2626;
-  --color-bad-soft: #fee2e2;
+  --color-brand-ink: #09605a;
+  --color-brand-soft: #e7f3f1;
+  --color-brand-tint: #cfe7e3;
+  --color-ok: #15803d;
+  --color-ok-soft: #e9f6ee;
+  --color-warn: #b45309;
+  --color-warn-soft: #fdf3e2;
+  --color-bad: #c0352b;
+  --color-bad-soft: #fcecea;
+
+  --shadow-card: 0 1px 2px 0 rgb(15 29 28 / 0.04), 0 1px 3px 0 rgb(15 29 28 / 0.03);
+  --shadow-pop: 0 12px 32px -8px rgb(15 29 28 / 0.18), 0 2px 6px -1px rgb(15 29 28 / 0.08);
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -23,6 +35,7 @@
 
 html {
   color-scheme: light;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -30,9 +43,93 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Tabla numerica: cifras tabulares para alinear columnas. */
+/* Cifras tabulares para alinear columnas. */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-brand-tint);
+}
+
+@layer components {
+  /* Foco visible y consistente en toda la app. */
+  :where(a, button, select, input, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Contenedor con scroll horizontal para tablas anchas. */
+  .scroll-x {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  /* Tablas de datos: cabecera suave, filas con hover, pie destacado. */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink);
+  }
+  .data-table thead th {
+    background: var(--color-surface-2);
+    color: var(--color-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .data-table thead th:first-child {
+    border-top-left-radius: 8px;
+  }
+  .data-table thead th:last-child {
+    border-top-right-radius: 8px;
+  }
+  .data-table tbody tr {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .data-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .data-table tbody tr:hover > td {
+    background: var(--color-surface-2);
+  }
+  .data-table tfoot tr {
+    border-top: 1px solid var(--color-line-strong);
+  }
+  .data-table tfoot td {
+    font-weight: 600;
+  }
+
+  /* Primera columna fija al hacer scroll horizontal (movil). */
+  .data-table .col-fija {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-surface);
+  }
+  .data-table thead .col-fija {
+    background: var(--color-surface-2);
+  }
+  .data-table tbody tr:hover > td.col-fija {
+    background: var(--color-surface-2);
+  }
+
+  /* Desplegables nativos (<details>) sin el triangulo del navegador. */
+  summary {
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
 }

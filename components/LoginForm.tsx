@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { KeyRound, LoaderCircle } from "lucide-react";
 
 export default function LoginForm({ next }: { next: string }) {
   const router = useRouter();
@@ -24,10 +25,10 @@ export default function LoginForm({ next }: { next: string }) {
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "No se pudo iniciar sesion");
+        setError(data.error || "No se pudo iniciar sesión");
       }
     } catch {
-      setError("Error de conexion");
+      setError("Error de conexión");
     } finally {
       setCargando(false);
     }
@@ -36,30 +37,39 @@ export default function LoginForm({ next }: { next: string }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="password" className="text-sm font-medium text-muted">
-          Contrasena
+        <label htmlFor="password" className="text-sm font-medium text-ink">
+          Contraseña
         </label>
-        <input
-          id="password"
-          type="password"
-          autoFocus
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-          placeholder="Introduce la contrasena"
-        />
+        <div className="relative">
+          <KeyRound
+            size={16}
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-faint"
+            aria-hidden
+          />
+          <input
+            id="password"
+            type="password"
+            autoFocus
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border border-line-strong bg-surface py-2.5 pr-3 pl-9 text-ink outline-none transition placeholder:text-faint focus:border-brand focus:ring-4 focus:ring-brand/15"
+            placeholder="Introduce la contraseña"
+          />
+        </div>
       </div>
       {error && (
-        <p className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">
+        <p role="alert" className="rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={cargando || password.length === 0}
-        className="rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition hover:bg-brand-ink disabled:opacity-50"
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-medium text-white shadow-sm transition hover:bg-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {cargando ? "Entrando..." : "Entrar"}
+        {cargando && <LoaderCircle size={16} className="animate-spin" aria-hidden />}
+        {cargando ? "Entrando…" : "Entrar"}
       </button>
     </form>
   );

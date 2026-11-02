@@ -54,35 +54,35 @@ function Fila({ inicial }: { inicial: FilaAjuste }) {
   }
 
   const input =
-    "w-full rounded-md border border-line bg-surface px-2 py-1.5 text-sm outline-none focus:border-brand";
+    "w-full rounded-lg border border-line-strong bg-surface px-2.5 py-1.5 text-sm outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/15";
 
   return (
-    <tr className="border-b border-line/60 align-top">
-      <td className="px-2 py-2 text-xs text-faint">{inicial.nickname}</td>
-      <td className="px-2 py-2">
-        <input className={input} value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={inicial.nickname} />
+    <tr className="align-middle">
+      <td className="px-3 py-2.5 text-xs text-faint">{inicial.nickname}</td>
+      <td className="px-3 py-2.5">
+        <input className={`${input} min-w-[10rem]`} value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={inicial.nickname} />
       </td>
-      <td className="px-2 py-2">
-        <select className={input} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+      <td className="px-3 py-2.5">
+        <select className={`${input} min-w-[9.5rem]`} value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="">Sin definir</option>
           <option value="propiedad">Propiedad</option>
           <option value="master_lease">Master lease</option>
         </select>
       </td>
-      <td className="px-2 py-2">
+      <td className="px-3 py-2.5">
         <input className={`${input} tabular text-right`} value={coste} onChange={(e) => setCoste(e.target.value)} inputMode="decimal" placeholder="0" />
       </td>
-      <td className="px-2 py-2">
+      <td className="px-3 py-2.5">
         <input className={`${input} tabular text-right`} value={renta} onChange={(e) => setRenta(e.target.value)} inputMode="decimal" placeholder="0" />
       </td>
-      <td className="px-2 py-2">
+      <td className="px-3 py-2.5">
         <input className={input} value={fecha} onChange={(e) => setFecha(e.target.value)} placeholder="YYYY-MM-DD" />
       </td>
-      <td className="px-2 py-2">
+      <td className="px-3 py-2.5">
         <button
           onClick={guardar}
           disabled={estado === "guardando"}
-          className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-ink disabled:opacity-50"
+          className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium whitespace-nowrap text-white shadow-sm transition hover:bg-brand-ink disabled:opacity-50"
         >
           {estado === "guardando" ? "..." : estado === "ok" ? "Guardado" : "Guardar"}
         </button>
@@ -94,17 +94,17 @@ function Fila({ inicial }: { inicial: FilaAjuste }) {
 
 export default function UnitSettingsEditor({ filas }: { filas: FilaAjuste[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[960px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
-            <th className="px-2 py-2 text-left font-medium">Nickname Guesty</th>
-            <th className="px-2 py-2 text-left font-medium">Nombre a mostrar</th>
-            <th className="px-2 py-2 text-left font-medium">Tipo</th>
-            <th className="px-2 py-2 text-left font-medium">Coste adquisicion (EUR)</th>
-            <th className="px-2 py-2 text-left font-medium">Renta mensual (EUR)</th>
-            <th className="px-2 py-2 text-left font-medium">Fecha inicio</th>
-            <th className="px-2 py-2 text-left font-medium"></th>
+          <tr>
+            <th className="px-3 py-2.5 text-left font-medium">Nickname Guesty</th>
+            <th className="px-3 py-2.5 text-left font-medium">Nombre a mostrar</th>
+            <th className="px-3 py-2.5 text-left font-medium">Tipo</th>
+            <th className="px-3 py-2.5 text-left font-medium">Coste adquisición (EUR)</th>
+            <th className="px-3 py-2.5 text-left font-medium">Renta mensual (EUR)</th>
+            <th className="px-3 py-2.5 text-left font-medium">Fecha inicio</th>
+            <th className="px-3 py-2.5 text-left font-medium"></th>
           </tr>
         </thead>
         <tbody>

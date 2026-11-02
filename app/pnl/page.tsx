@@ -1,7 +1,6 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
-import { Card, SectionTitle, MiniStat } from "@/components/ui";
+import AppShell from "@/components/shell/AppShell";
+import { Card, CardHeader, KpiCard, StatGrid, pillClass } from "@/components/ui";
 import PnLTable from "@/components/PnLTable";
 import OpexDetalle from "@/components/OpexDetalle";
 import Insights from "@/components/Insights";
@@ -120,114 +119,116 @@ export default async function PnlPage({
   const opexCats = await costesPorCategoria(periodMeses, sel?.nickname);
   const etiqueta = etiquetaPeriodo(mes, periodo);
 
-  const chip = (activo: boolean) =>
-    `whitespace-nowrap rounded-full border px-3 py-1 text-sm transition ${
-      activo
-        ? "border-brand bg-brand text-white"
-        : "border-line bg-surface text-muted hover:border-brand hover:text-brand"
-    }`;
+  const alcanceNombre = sel ? sel.displayName : "Portfolio";
+  const coma2 = (n: number) => n.toFixed(2).replace(".", ",");
 
   return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo={periodo}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={estado.ultimoExito}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        <Banner estado={estado} />
-
-        {/* Selector de alcance por chips */}
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <a href={`/pnl?mes=${mes}&periodo=${periodo}`} className={chip(!sel)}>
-            Portfolio
+    <AppShell
+      titulo="P&L y caja"
+      subtitulo={`${alcanceNombre} · 12 meses hasta ${mesLabel(mes)}`}
+      contexto={{ mes, periodo }}
+      estado={estado}
+    >
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        <a href={`/pnl?mes=${mes}&periodo=${periodo}`} className={pillClass(!sel)}>
+          Portfolio
+        </a>
+        {unidades.map((u) => (
+          <a
+            key={u.listingId}
+            href={`/pnl?mes=${mes}&periodo=${periodo}&unidad=${u.listingId}`}
+            className={pillClass(sel?.listingId === u.listingId)}
+          >
+            {u.displayName}
           </a>
-          {unidades.map((u) => (
-            <a
-              key={u.listingId}
-              href={`/pnl?mes=${mes}&periodo=${periodo}&unidad=${u.listingId}`}
-              className={chip(sel?.listingId === u.listingId)}
-            >
-              {u.displayName}
-            </a>
-          ))}
-        </div>
+        ))}
+      </div>
 
-        {/* Resumen ejecutivo del alcance */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MiniStat label="Ingresos TTM" value={eur(totalTTM.ing)} />
-          <MiniStat label="NOI TTM" value={eur(totalTTM.noi)} />
-          <MiniStat
-            label="Margen NOI TTM"
-            value={totalTTM.ing > 0 ? pct(totalTTM.noi / totalTTM.ing) : "-"}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard label="Ingresos 12 meses" value={eur(totalTTM.ing)} />
+        <KpiCard
+          label="NOI 12 meses"
+          value={eur(totalTTM.noi)}
+          sub={totalTTM.ing > 0 ? `Margen ${pct(totalTTM.noi / totalTTM.ing)}` : undefined}
+        />
+        <KpiCard
+          label="Caja neta 12 meses"
+          value={eur(totalTTM.caja)}
+          sub={totalTTM.ing > 0 ? `${pct(totalTTM.caja / totalTTM.ing)} de los ingresos` : undefined}
+        />
+        {periodo === "ttm" ? (
+          <KpiCard
+            label="Servicio de deuda 12 meses"
+            value={servicioTTM > 0 ? eur(servicioTTM) : "Sin deuda"}
+            sub={servicioTTM > 0 ? `Incluye ${eur(totalTTM.intereses)} de intereses` : undefined}
           />
-          <MiniStat
-            label={`NOI · ${etiqueta}`}
-            value={eur(rPeriodo.noi)}
-          />
-          <MiniStat label="Caja neta TTM" value={eur(totalTTM.caja)} />
-          <MiniStat label="DSCR TTM" value={dscrTTM !== null ? `${dscrTTM.toFixed(2)}x` : "sin deuda"} />
-          <MiniStat label="Deuda viva" value={eur(deudaViva)} />
-          <MiniStat
-            label="Cash-on-cash TTM"
-            value={cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}
-          />
-        </div>
-
-        {consejosCaja.length > 0 && (
-          <Card>
-            <SectionTitle>Lectura del P&amp;L de caja</SectionTitle>
-            <Insights insights={consejosCaja} />
-          </Card>
+        ) : (
+          <KpiCard label="NOI del periodo" value={eur(rPeriodo.noi)} sub={etiqueta} />
         )}
+        <KpiCard
+          label="DSCR 12 meses"
+          value={dscrTTM !== null ? `${coma2(dscrTTM)}x` : "Sin deuda"}
+          sub="NOI / servicio de deuda"
+        />
+        <KpiCard label="Deuda viva" value={eur(deudaViva)} />
+        <KpiCard
+          label="Cash-on-cash 12 meses"
+          value={cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}
+          sub="Caja sobre equity invertido"
+        />
+        <KpiCard
+          label="Amortización 12 meses"
+          value={eur(totalTTM.principal)}
+          sub="Patrimonio construido"
+        />
+      </div>
 
+      {consejosCaja.length > 0 && (
         <Card>
-          <SectionTitle>
-            P&amp;L mensual hasta caja · {sel ? sel.displayName : "portfolio"} · 12 meses hasta {mesLabel(mes)}
-          </SectionTitle>
-          <PnLTable serie={serieCash} />
+          <CardHeader titulo="Lectura del P&L de caja" />
+          <Insights insights={consejosCaja} />
         </Card>
+      )}
 
-        {valorRef !== null && (
-          <Card>
-            <SectionTitle>
-              Patrimonio (orientativo) · {sel ? sel.displayName : "unidades en propiedad"}
-            </SectionTitle>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-              <MiniStat
-                label={`Valor implicito (${Math.round(CAP_RATE.ref * 100)}% cap)`}
-                value={eur(valorRef)}
-              />
-              <MiniStat
-                label="Banda de valor"
-                value={`${eur(valorMin)} - ${eur(valorMax)}`}
-              />
-              <MiniStat label="Deuda viva" value={eur(deudaViva)} />
-              <MiniStat label="Equity neto" value={eur(equityNeto)} />
-              <MiniStat
-                label="Plusvalia vs coste"
-                value={costePropio > 0 ? eur(valorRef - costePropio) : "-"}
-              />
-              <MiniStat label="LTV actual" value={ltvActual !== null ? pct(ltvActual) : "-"} />
-            </div>
-            <p className="mt-2 text-xs text-faint">
-              Valor = NOI TTM de las unidades en propiedad ({eur(noiTTMPropio)}) capitalizado a un
-              cap rate del {Math.round(CAP_RATE.min * 100)}-{Math.round(CAP_RATE.max * 100)}% (
-              referencia {Math.round(CAP_RATE.ref * 100)}%). Es una referencia de gestion, no una
-              tasacion. El equity neto usa el valor de referencia menos la deuda viva real; cada
-              mes se suman ~{eur(totalTTM.principal / 12)} de amortizacion al patrimonio.
-            </p>
-          </Card>
-        )}
+      <Card>
+        <CardHeader
+          titulo="Cuenta de resultados hasta caja"
+          descripcion={`${alcanceNombre} · mes a mes, últimos 12 meses`}
+        />
+        <PnLTable serie={serieCash} />
+      </Card>
 
+      {valorRef !== null && (
         <Card>
-          <SectionTitle>
-            Desglose de costes · {sel ? sel.displayName : "portfolio"} · {etiqueta}
-          </SectionTitle>
-          <OpexDetalle categorias={opexCats} ingresos={rPeriodo.brutos} />
+          <CardHeader
+            titulo="Patrimonio (orientativo)"
+            descripcion={sel ? sel.displayName : "Unidades en propiedad"}
+          />
+          <StatGrid
+            className="lg:grid-cols-6"
+            items={[
+              { label: `Valor implícito (cap ${Math.round(CAP_RATE.ref * 100)}%)`, value: eur(valorRef) },
+              { label: "Banda de valor", value: `${eur(valorMin)} a ${eur(valorMax)}` },
+              { label: "Deuda viva", value: eur(deudaViva) },
+              { label: "Equity neto", value: eur(equityNeto) },
+              { label: "Plusvalía vs coste", value: costePropio > 0 ? eur(valorRef - costePropio) : "-" },
+              { label: "LTV actual", value: ltvActual !== null ? pct(ltvActual) : "-" },
+            ]}
+          />
+          <p className="mt-3 text-xs text-faint">
+            Valor = NOI de 12 meses de las unidades en propiedad ({eur(noiTTMPropio)}) capitalizado
+            a un cap rate del {Math.round(CAP_RATE.min * 100)}-{Math.round(CAP_RATE.max * 100)}%
+            (referencia {Math.round(CAP_RATE.ref * 100)}%). Es una referencia de gestión, no una
+            tasación. El equity neto usa el valor de referencia menos la deuda viva real; cada mes
+            se suman ~{eur(totalTTM.principal / 12)} de amortización al patrimonio.
+          </p>
         </Card>
-      </main>
-    </div>
+      )}
+
+      <Card>
+        <CardHeader titulo="Desglose de costes" descripcion={`${alcanceNombre} · ${etiqueta}`} />
+        <OpexDetalle categorias={opexCats} ingresos={rPeriodo.brutos} />
+      </Card>
+    </AppShell>
   );
 }

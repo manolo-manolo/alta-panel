@@ -1,24 +1,20 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
+import AppShell from "@/components/shell/AppShell";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, KpiCard, SectionTitle, MiniStat } from "@/components/ui";
+import { Card, CardHeader, KpiCard, LinkFlecha } from "@/components/ui";
 import MetricChart from "@/components/charts/MetricChart";
 import ChannelTable from "@/components/ChannelTable";
 import Insights from "@/components/Insights";
 import { generarInsights } from "@/lib/insights";
 import { generarInsightsForward } from "@/lib/forward-insights";
 import ForwardOutlook from "@/components/ForwardOutlook";
-import ForwardMatrix, { type FilaForward } from "@/components/ForwardMatrix";
 import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
 import { forwardKpis } from "@/lib/forward";
 import { sumarMeses } from "@/lib/time";
-import PnLTable from "@/components/PnLTable";
 import ReviewsCard from "@/components/ReviewsCard";
-import OpexDetalle from "@/components/OpexDetalle";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
-import { eur, num, pct, mesLabel, delta } from "@/lib/format";
+import { eur, num, pct, delta } from "@/lib/format";
 import {
   getUnidades,
   unidadMesMap,
@@ -33,7 +29,6 @@ import {
   resumenReviews,
   reviewsNo5,
   costesLimpieza,
-  costesPorCategoria,
   noiTTM,
   ttm,
   mesPorDefecto,
@@ -74,18 +69,17 @@ export default async function PortfolioPage({
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return (
-      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
-        <SetupNotice titulo="Base de datos no disponible" detalle={`Detalle tecnico: ${msg}`} />
-      </Shell>
+      <AppShell titulo="Resumen" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Base de datos no disponible" detalle={`Detalle técnico: ${msg}`} />
+      </AppShell>
     );
   }
 
   if (unidades.length === 0) {
     return (
-      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
-        <Banner estado={estado} />
-        <SetupNotice titulo="Todavia no hay unidades sincronizadas" />
-      </Shell>
+      <AppShell titulo="Resumen" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Todavía no hay unidades sincronizadas" />
+      </AppShell>
     );
   }
 
@@ -146,14 +140,13 @@ export default async function PortfolioPage({
   const ttmPrevTot = totalesChart(seriePrior);
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, fwd, stats, revResumen, revNo5, opexCats, cleanCostPortfolio] =
+  const [mix, fwd, stats, revResumen, revNo5, cleanCostPortfolio] =
     await Promise.all([
       mixCanales(periodMeses),
       forwardKpis(unidades.map((u) => u.listingId)),
       statsReservas(periodMeses),
       resumenReviews(undefined, desde, hastaExcl),
       reviewsNo5(undefined, desde, hastaExcl),
-      costesPorCategoria(periodMeses),
       costesLimpieza(periodMeses),
     ]);
 
@@ -245,37 +238,7 @@ export default async function PortfolioPage({
     ratingMedio: revResumen.ratingMedio,
   });
 
-  // Vision futura: filas por unidad para la matriz y consejos de revenue.
-  const ventanasFila = (listingId: string) =>
-    (fwd.porUnidad.get(listingId) ?? []).map((v) => ({
-      dias: v.dias,
-      occ: v.occ,
-      adr: v.adr,
-      occSTLY: v.occSTLY,
-      adrSTLY: v.adrSTLY,
-      noches: v.noches,
-      disponibles: v.disponibles,
-      revenue: v.revenue,
-    }));
-  const filasFwd: FilaForward[] = unidades.map((u) => ({
-    listingId: u.listingId,
-    nombre: u.displayName,
-    ventanas: ventanasFila(u.listingId),
-  }));
-  const totalFwd: FilaForward = {
-    listingId: "__total__",
-    nombre: "Portfolio",
-    ventanas: fwd.portfolio.map((v) => ({
-      dias: v.dias,
-      occ: v.occ,
-      adr: v.adr,
-      occSTLY: v.occSTLY,
-      adrSTLY: v.adrSTLY,
-      noches: v.noches,
-      disponibles: v.disponibles,
-      revenue: v.revenue,
-    })),
-  };
+  // Vision futura: consejos de revenue del portfolio.
   const insightsFwd = generarInsightsForward(
     fwd.portfolio,
     unidades.map((u) => ({
@@ -297,156 +260,96 @@ export default async function PortfolioPage({
   });
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
+  const opts = unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }));
 
   return (
-    <Shell mes={mes} periodo={periodo} unidades={unidades} ultima={estado.ultimoExito}>
-      <Banner estado={estado} />
-
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-ink">
-          Portfolio{" "}
-          <span className="text-muted">
-            · {etiqueta} ({mesLabel(mes)}) · {num(unidadesActivas)} unidades activas
-          </span>
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <KpiCard label="Ocupacion" value={pct(occ)}
+    <AppShell
+      titulo="Resumen"
+      subtitulo={`Portfolio · ${etiqueta} · ${num(unidadesActivas)} unidades activas`}
+      contexto={{ mes, periodo, unidades: opts }}
+      estado={estado}
+    >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+        <KpiCard label="Ocupación" value={pct(occ)}
+          sub={`${num(rAct.vendidas)} de ${num(rAct.disponibles)} noches${rAct.bloqueadas > 0 ? ` · ${num(rAct.bloqueadas)} bloqueadas` : ""}`}
           deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
           deltaYoY={delta(occ, ocupacionDe(rPrior))} />
         <KpiCard label="ADR" value={eur(adr)}
+          sub={stats.estanciaMedia ? `Estancia media ${stats.estanciaMedia.toFixed(1).replace(".", ",")} noches` : undefined}
           deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
           deltaYoY={delta(adr, adrDe(rPrior))} />
         <KpiCard label="RevPAR" value={eur(revpar)}
+          sub={stats.leadTimeMedio ? `Ventana de reserva ${Math.round(stats.leadTimeMedio)} días` : undefined}
           deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
           deltaYoY={delta(revpar, revparDe(rPrior))} />
         <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
+          sub={`Brutos ${eur(rAct.brutos)}`}
           deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
           deltaYoY={delta(rAct.netos, rPrior.netos)} />
         <KpiCard label="NOI" value={eur(rAct.noi)}
+          sub={rAct.limpieza > 0 ? `Limpieza neta ${eur(limpiezaNetoPortfolio)}` : undefined}
           deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
           deltaYoY={delta(rAct.noi, rPrior.noi)} />
         <KpiCard label="Margen NOI" value={pct(margenNOI)}
+          sub={`Propiedad ${pct(margenProp, 0)} · Master lease ${pct(margenMaster, 0)}`}
           deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
           deltaYoY={delta(margenNOI, margenPrior)} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <MiniStat label="Ingresos brutos" value={eur(rAct.brutos)} />
-        <MiniStat label="Noches vendidas" value={num(rAct.vendidas)} />
-        <MiniStat label="Noches disponibles" value={num(rAct.disponibles)} />
-        <MiniStat label="Noches bloqueadas" value={num(rAct.bloqueadas)} />
-        <MiniStat label="Estancia media" value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} n` : "-"} />
-        <MiniStat label="Ventana reserva" value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} d` : "-"} />
-      </div>
-
       {insights.length > 0 && (
         <Card>
-          <SectionTitle>Insights y recomendaciones</SectionTitle>
+          <CardHeader
+            titulo="Lectura del periodo"
+            descripcion="Lo que destaca en las cifras de arriba"
+            accion={<LinkFlecha href="/acciones">Centro de acciones</LinkFlecha>}
+          />
           <Insights insights={insights} />
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <SectionTitle>Evolucion (ultimos 12 meses)</SectionTitle>
+          <CardHeader titulo="Evolución" descripcion="Últimos 12 meses" />
           <MetricChart data={chartData} ttm={ttmTot} ttmPrev={ttmPrevTot} />
         </Card>
         <Card>
-          <SectionTitle>Mix de canales · {etiqueta}</SectionTitle>
+          <CardHeader titulo="Mix de canales" descripcion={etiqueta} />
           <ChannelTable data={mix} />
         </Card>
       </div>
 
       <Card>
-        <SectionTitle>Vision futura · proximos 15/30/60/90 dias (on the books)</SectionTitle>
+        <CardHeader
+          titulo="Visión futura"
+          descripcion="Ocupación y ADR ya reservados para los próximos días, frente al mismo punto del año pasado"
+          accion={<LinkFlecha href={`/unidades?mes=${mes}&periodo=${periodo}#futuro`}>Por unidad</LinkFlecha>}
+        />
         <ForwardOutlook ventanas={fwd.portfolio} />
         {insightsFwd.length > 0 && (
-          <div className="mt-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
-              Consejos de revenue
-            </h3>
+          <div className="mt-5">
+            <h3 className="mb-2.5 text-sm font-semibold text-ink">Consejos de revenue</h3>
             <Insights insights={insightsFwd} />
           </div>
         )}
+        <div className="mt-5">
+          <h3 className="mb-2.5 text-sm font-semibold text-ink">Próximos 6 meses</h3>
+          <ForwardMeses filas={mesesFwdFilas} />
+        </div>
       </Card>
 
       <Card>
-        <SectionTitle>Ocupacion y ADR futuros por unidad</SectionTitle>
-        <ForwardMatrix filas={filasFwd} total={totalFwd} mes={mes} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Proximos 6 meses (on the books)</SectionTitle>
-        <ForwardMeses filas={mesesFwdFilas} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Reviews · {etiqueta}</SectionTitle>
-        <ReviewsCard resumen={revResumen} no5={revNo5} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Unidades · {etiqueta}</SectionTitle>
+        <CardHeader
+          titulo="Unidades"
+          descripcion={etiqueta}
+          accion={<LinkFlecha href={`/unidades?mes=${mes}&periodo=${periodo}`}>Cuadro de mando</LinkFlecha>}
+        />
         <UnitsTable filas={filas} mes={mes} total={total} />
       </Card>
 
       <Card>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-faint">
-            P&amp;L del portfolio (ultimos 12 meses)
-          </h2>
-          <a
-            href={`/pnl?mes=${mes}&periodo=${periodo}`}
-            className="text-sm font-medium text-brand hover:text-brand-ink"
-          >
-            Ver P&amp;L por unidad →
-          </a>
-        </div>
-        <PnLTable serie={serie} />
+        <CardHeader titulo="Reviews" descripcion={etiqueta} />
+        <ReviewsCard resumen={revResumen} no5={revNo5} />
       </Card>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStat label="Margen NOI total" value={pct(margenNOI)} />
-        <MiniStat label="Margen NOI propiedad" value={pct(margenProp)} />
-        <MiniStat label="Margen NOI master lease" value={pct(margenMaster)} />
-        <MiniStat
-          label="Limpieza neta"
-          value={`${eur(limpiezaNetoPortfolio)}${rAct.limpieza > 0 ? ` (${pct(limpiezaNetoPortfolio / rAct.limpieza)})` : ""}`}
-        />
-      </div>
-
-      <Card>
-        <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
-        <OpexDetalle categorias={opexCats} ingresos={rAct.brutos} />
-      </Card>
-    </Shell>
-  );
-}
-
-function Shell({
-  mes,
-  periodo,
-  unidades,
-  ultima,
-  children,
-}: {
-  mes: string;
-  periodo: string;
-  unidades: { listingId: string; displayName: string }[];
-  ultima: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo={periodo}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={ultima}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">{children}</main>
-    </div>
+    </AppShell>
   );
 }

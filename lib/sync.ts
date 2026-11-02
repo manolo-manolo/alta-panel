@@ -174,7 +174,7 @@ export async function runSync(opts: {
       reservations: 0,
       costRows: 0,
       errores: [],
-      message: "Ya hay una sincronizacion en curso.",
+      message: "Ya hay una sincronización en curso.",
       finishedAt: startIso,
     };
   }

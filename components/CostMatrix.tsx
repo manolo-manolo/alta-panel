@@ -53,8 +53,8 @@ export default function CostMatrix({
     }
   }
 
-  const flecha = (key: string) => (sortKey === key ? (desc ? " ▼" : " ▲") : "");
-  const th = "cursor-pointer px-2 py-2 text-right font-medium hover:text-ink whitespace-nowrap";
+  const flecha = (key: string) => (sortKey === key ? (desc ? " ↓" : " ↑") : "");
+  const th = "cursor-pointer px-3 py-2.5 text-right font-medium hover:text-ink whitespace-nowrap";
 
   const celdas = (f: FilaCoste, negrita = false) => (
     <>
@@ -63,7 +63,7 @@ export default function CostMatrix({
         return (
           <td
             key={c}
-            className={`whitespace-nowrap px-2 py-2 text-right ${v === 0 ? "text-faint" : negrita ? "text-ink" : "text-muted"}`}
+            className={`whitespace-nowrap px-3 py-2.5 text-right ${v === 0 ? "text-faint" : negrita ? "text-ink" : "text-muted"}`}
           >
             {v === 0 ? "-" : eur(v)}
             {f.estimadas[c] && (
@@ -74,23 +74,23 @@ export default function CostMatrix({
           </td>
         );
       })}
-      <td className="whitespace-nowrap border-l border-line/60 px-2 py-2 text-right font-semibold text-ink">
+      <td className="whitespace-nowrap border-l border-line/60 px-3 py-2.5 text-right font-semibold text-ink">
         {eur(f.total)}
       </td>
-      <td className="whitespace-nowrap px-2 py-2 text-right text-muted">
+      <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted">
         {f.netos > 0 ? pct(f.total / f.netos) : "-"}
       </td>
     </>
   );
 
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[900px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[900px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
+          <tr>
             <th
               onClick={() => orden("nombre")}
-              className="cursor-pointer px-2 py-2 text-left font-medium hover:text-ink"
+              className="col-fija cursor-pointer px-3 py-2.5 text-left font-medium hover:text-ink"
             >
               Unidad{flecha("nombre")}
             </th>
@@ -115,7 +115,7 @@ export default function CostMatrix({
               onClick={() => router.push(`/unidad/${f.listingId}?mes=${mes}`)}
               className="cursor-pointer border-b border-line/60 hover:bg-surface-2"
             >
-              <td className="whitespace-nowrap px-2 py-2 text-left font-medium text-ink">
+              <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left font-medium text-ink">
                 {f.nombre}
               </td>
               {celdas(f)}
@@ -124,7 +124,7 @@ export default function CostMatrix({
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-line font-semibold text-ink">
-            <td className="px-2 py-2 text-left">{total.nombre}</td>
+            <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left">{total.nombre}</td>
             {celdas(total, true)}
           </tr>
         </tfoot>

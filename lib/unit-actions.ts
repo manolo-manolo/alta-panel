@@ -73,7 +73,10 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
   const adrRef = m.adr ?? m.adrLY ?? i.adrTTM;
   const margen = i.margenNoche ?? (adrRef !== null ? adrRef * 0.6 : null);
   const restantes = Math.max(0, m.disponibles - m.noches);
-  const tieneSTLY = m.occSTLY !== null && (m.nochesSTLY >= 3 || m.nochesLY >= 10);
+  // El ritmo solo es evidencia si el ano pasado ya habia reservas en este mismo
+  // punto: comparar contra un STLY de cero noches hace que cualquier reserva
+  // lejana parezca "por delante".
+  const tieneSTLY = m.occSTLY !== null && m.nochesSTLY >= 3;
   const diff = tieneSTLY ? m.occ - (m.occSTLY as number) : null;
   const etiquetaMes = mesLabel(m.mes);
 
@@ -89,8 +92,8 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
       palanca: "precio",
       impacto,
       texto: caro
-        ? `${etiquetaMes}: vas al ${pct0(m.occ)} reservado${diff !== null ? ` (${Math.round(diff * 100)} pts mas que el ano pasado)` : ""} pero el ADR ya es un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} mas alto que entonces. Sube solo un 5% en fechas sueltas y vigila la recogida.`
-        : `Sube las tarifas de ${etiquetaMes} un 10-15%: ya vas al ${pct0(m.occ)} reservado${diff !== null ? ` vs ${pct0(m.occSTLY as number)} a estas alturas el ano pasado (cerro al ${m.occLY !== null ? pct0(m.occLY) : "n/d"})` : ""}. Quedan ${restantes} noches; cada +10% en ellas ≈ ${eur0(impacto)}.`,
+        ? `${etiquetaMes}: vas al ${pct0(m.occ)} reservado${diff !== null ? ` (${Math.round(diff * 100)} pts más que el año pasado)` : ""} pero el ADR ya es un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} más alto que entonces. Sube solo un 5% en fechas sueltas y vigila la recogida.`
+        : `Sube las tarifas de ${etiquetaMes} un 10-15%: ya vas al ${pct0(m.occ)} reservado${diff !== null ? ` vs ${pct0(m.occSTLY as number)} a estas alturas el año pasado (cerró al ${m.occLY !== null ? pct0(m.occLY) : "n/d"})` : ""}. Quedan ${restantes} noches; cada +10% en ellas ≈ ${eur0(impacto)}.`,
     });
   }
 
@@ -112,14 +115,14 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
         tono: "info",
         palanca: "vigilar",
         impacto: null,
-        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detras del ritmo del ano pasado, pero con la recogida tipica de entonces (${pickupLY} noches) cerraria en torno al ${pct0(occProy)}. No toques precio: vigila cada semana.`,
+        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detrás del ritmo del año pasado, pero con la recogida típica de entonces (${pickupLY} noches) cerraría en torno al ${pct0(occProy)}. No toques precio: vigila cada semana.`,
       });
     } else if (m.diasHasta > 45) {
       out.push({
         tono: "info",
         palanca: "vigilar",
         impacto: nochesGap * margen * 0.5,
-        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detras (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}) y la proyeccion (${pct0(occProy)}) no llega al cierre del ano pasado (${pct0(objetivo)}). Aun quedan ${m.diasHasta} dias: no bajes precio todavia; trabaja visibilidad (fotos, titulo, promociones de canal) y reevalua a 45 dias.`,
+        texto: `${etiquetaMes} va ${Math.abs(Math.round((diff as number) * 100))} pts por detrás (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}) y la proyección (${pct0(occProy)}) no llega al cierre del año pasado (${pct0(objetivo)}). Aún quedan ${m.diasHasta} días: no bajes precio todavía; trabaja visibilidad (fotos, título, promociones de canal) y reevalúa a 45 días.`,
       });
     } else if (precioAlto) {
       const impacto = nochesGap * margen * DESCUENTO_MARGEN;
@@ -127,7 +130,7 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
         tono: "alerta",
         palanca: "precio",
         impacto,
-        texto: `${etiquetaMes} a ${m.diasHasta} dias: vas al ${pct0(m.occ)} vs ${pct0(m.occSTLY as number)} el ano pasado, la proyeccion (${pct0(occProy)}) no llega al cierre de entonces (${pct0(objetivo)}) y el ADR (${eur0(m.adr!)}) esta un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} por encima (${eur0(m.adrLY!)}). Ajusta un 5-8% solo en las fechas sin vender (no la tarifa base) y anade descuento de 3+ noches: ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)}.`,
+        texto: `${etiquetaMes} a ${m.diasHasta} días: vas al ${pct0(m.occ)} vs ${pct0(m.occSTLY as number)} el año pasado, la proyección (${pct0(occProy)}) no llega al cierre de entonces (${pct0(objetivo)}) y el ADR (${eur0(m.adr!)}) está un ${pct0((m.adr! - m.adrLY!) / m.adrLY!)} por encima (${eur0(m.adrLY!)}). Ajusta un 5-8% solo en las fechas sin vender (no la tarifa base) y añade descuento de 3+ noches: ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)}.`,
       });
     } else {
       const impacto = nochesGap * margen * 0.5;
@@ -135,7 +138,7 @@ function accionesPrecioMes(m: MesPace, i: UnidadAccionInput, ratingBajo: boolean
         tono: "alerta",
         palanca: "visibilidad",
         impacto,
-        texto: `${etiquetaMes} a ${m.diasHasta} dias va ${Math.abs(Math.round((diff as number) * 100))} pts por detras (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}), la proyeccion (${pct0(occProy)}) no llega al cierre del ano pasado y NO es precio (ADR en linea). Toca visibilidad: fotos y titulo, estancia minima, promocion en Airbnb/Booking y respuesta rapida. ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)} recuperables.`,
+        texto: `${etiquetaMes} a ${m.diasHasta} días va ${Math.abs(Math.round((diff as number) * 100))} pts por detrás (${pct0(m.occ)} vs ${pct0(m.occSTLY as number)}), la proyección (${pct0(occProy)}) no llega al cierre del año pasado y NO es precio (ADR en línea). Toca visibilidad: fotos y título, estancia mínima, promoción en Airbnb/Booking y respuesta rápida. ${Math.round(nochesGap)} noches en juego ≈ ${eur0(impacto)} recuperables.`,
       });
     }
   }
@@ -160,7 +163,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "bueno",
       palanca: "huecos",
       impacto,
-      texto: `${i.intel.huecos30} noches en huecos de 1-2 dias entre reservas en los proximos 30 dias. Relaja la estancia minima a 1 noche en esos huecos y ponles precio de hueco (−10%): ≈ ${eur0(impacto)} que hoy se pierden.`,
+      texto: `${i.intel.huecos30} noches en huecos de 1-2 días entre reservas en los próximos 30 días. Relaja la estancia mínima a 1 noche en esos huecos y ponles precio de hueco (−10%): ≈ ${eur0(impacto)} que hoy se pierden.`,
     });
   }
 
@@ -177,14 +180,14 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
         tono: "bueno",
         palanca: "finde",
         impacto,
-        texto: `Findes al ${pct0(occF)} y entre semana al ${pct0(occS)} en 60 dias: sube viernes y sabado un 10-15% y lanza oferta de 3+ noches o descuento semanal para rellenar ${libresS} noches entre semana. ≈ ${eur0(impacto)}.`,
+        texto: `Findes al ${pct0(occF)} y entre semana al ${pct0(occS)} en 60 días: sube viernes y sábado un 10-15% y lanza oferta de 3+ noches o descuento semanal para rellenar ${libresS} noches entre semana. ≈ ${eur0(impacto)}.`,
       });
     } else if (occS >= 0.75 && occF <= 0.5) {
       out.push({
         tono: "bueno",
         palanca: "finde",
         impacto: libresF * margen * FILL_SEMANA,
-        texto: `Entre semana al ${pct0(occS)} pero findes solo al ${pct0(occF)}: revisa el precio de viernes y sabado (suele estar por encima de mercado) y el minimo de 2 noches en finde.`,
+        texto: `Entre semana al ${pct0(occS)} pero findes solo al ${pct0(occF)}: revisa el precio de viernes y sábado (suele estar por encima de mercado) y el mínimo de 2 noches en finde.`,
       });
     }
   }
@@ -198,7 +201,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
         tono: "alerta",
         palanca: "lastminute",
         impacto,
-        texto: `A 15 dias la proyeccion (${pct0(occProy)}) no llega al cierre del ano pasado (${pct0(occLY)}) ni con la recogida tipica: descuento last minute escalonado (−10% a 7 dias, −20% a 3) en ${i.intel.libres15} noches sin vender ≈ ${eur0(impacto)}.`,
+        texto: `A 15 días la proyección (${pct0(occProy)}) no llega al cierre del año pasado (${pct0(occLY)}) ni con la recogida típica: descuento last minute escalonado (−10% a 7 días, −20% a 3) en ${i.intel.libres15} noches sin vender ≈ ${eur0(impacto)}.`,
       });
     }
   }
@@ -210,7 +213,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "info",
       palanca: "bloqueos",
       impacto,
-      texto: `${i.intel.bloqueadas60} noches bloqueadas en los proximos 60 dias ≈ ${eur0(impacto)} de RevPAR que no se puede vender. Confirma que cada bloqueo sigue siendo necesario.`,
+      texto: `${i.intel.bloqueadas60} noches bloqueadas en los próximos 60 días ≈ ${eur0(impacto)} de RevPAR que no se puede vender. Confirma que cada bloqueo sigue siendo necesario.`,
     });
   }
 
@@ -221,7 +224,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "alerta",
       palanca: "limpieza",
       impacto: deficit,
-      texto: `La limpieza pierde ${eur0(deficit)} al ano: pagas ${eur0(i.limpiezaCosteTTM)} y cobras ${eur0(i.limpiezaIngresoTTM)}. Sube la tarifa de limpieza al huesped (o el minimo de noches) hasta cubrir el coste; es el euro mas facil de recuperar.`,
+      texto: `La limpieza pierde ${eur0(deficit)} al año: pagas ${eur0(i.limpiezaCosteTTM)} y cobras ${eur0(i.limpiezaIngresoTTM)}. Sube la tarifa de limpieza al huésped (o el mínimo de noches) hasta cubrir el coste; es el euro más fácil de recuperar.`,
     });
   }
 
@@ -232,7 +235,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "info",
       palanca: "canal",
       impacto,
-      texto: `Comisiones del ${pct0(i.comisionPct)} sobre ingresos: cada 10 puntos de reservas que pasen a directo (repetidores, web, codigo de descuento directo) valen ≈ ${eur0(impacto)} al ano.`,
+      texto: `Comisiones del ${pct0(i.comisionPct)} sobre ingresos: cada 10 puntos de reservas que pasen a directo (repetidores, web, código de descuento directo) valen ≈ ${eur0(impacto)} al año.`,
     });
   }
 
@@ -242,14 +245,14 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "alerta",
       palanca: "reviews",
       impacto: null,
-      texto: `Rating de ${i.rating90!.toFixed(2)} en 90 dias (${i.numReviews90} reviews): no subas precio hasta recuperarlo. Lee las reviews, corrige la causa y pide valoracion a los proximos huespedes contentos.`,
+      texto: `Rating de ${i.rating90!.toFixed(2).replace(".", ",")} en 90 días (${i.numReviews90} reviews): no subas precio hasta recuperarlo. Lee las reviews, corrige la causa y pide valoración a los próximos huéspedes contentos.`,
     });
   } else if (i.rating90 !== null && i.numReviews90 >= 3 && i.rating90 >= 4.9) {
     out.push({
       tono: "bueno",
       palanca: "reviews",
       impacto: null,
-      texto: `Rating de ${i.rating90.toFixed(2)} en 90 dias: producto redondo, apoya las subidas de precio recomendadas.`,
+      texto: `Rating de ${i.rating90.toFixed(2).replace(".", ",")} en 90 días: producto redondo, apoya las subidas de precio recomendadas.`,
     });
   }
 
@@ -265,7 +268,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "alerta",
       palanca: "estructura",
       impacto,
-      texto: `Por debajo del punto de equilibrio de caja: necesita ${pct0(i.occBreakEven)} de ocupacion para cubrir fijos, overhead y deuda, y lleva ${pct0(i.occTTM)} en 12 meses (brecha ≈ ${eur0(impacto)}/ano). O sube RevPAR o baja estructura.`,
+      texto: `Por debajo del punto de equilibrio de caja: necesita ${pct0(i.occBreakEven)} de ocupación para cubrir fijos, overhead y deuda, y lleva ${pct0(i.occTTM)} en 12 meses (brecha ≈ ${eur0(impacto)}/año). O sube RevPAR o baja estructura.`,
     });
   } else if (i.caja < -50 && i.tieneDeuda) {
     out.push({

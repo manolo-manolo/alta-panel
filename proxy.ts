@@ -45,6 +45,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Ejecuta en todo salvo estaticos y metadatos.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+  // Ejecuta en todo salvo estaticos, metadatos e imagenes de /public (el logo
+  // tiene que cargar en /login, antes de iniciar sesion).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)",
+  ],
 };
