@@ -83,7 +83,7 @@ export default async function AccionesPage() {
   return (
     <AppShell
       titulo="Acciones"
-      subtitulo={`Qué tocar hoy para ganar más · ${mesLabel(centro.mes)}`}
+      subtitulo={`Qué tocar hoy para ganar más · resultados cerrados hasta ${mesLabel(centro.mes)}`}
       estado={estado}
       mes={centro.mes}
     >

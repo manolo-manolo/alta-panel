@@ -5,6 +5,8 @@ import { Card, CardHeader } from "@/components/ui";
 import InsightItem from "@/components/InsightItem";
 import UnitsCommandTable, { type FilaMando } from "@/components/UnitsCommandTable";
 import ForwardMatrix, { type FilaForward } from "@/components/ForwardMatrix";
+import OccDiagnostico from "@/components/OccDiagnostico";
+import { diagnosticoOcupacion } from "@/lib/occ-diagnostico";
 import { seriePnLCash, breakEvenOcc } from "@/lib/finance";
 import {
   cargarContexto,
@@ -14,13 +16,12 @@ import {
   itemsUnidad,
 } from "@/lib/acciones";
 import type { AccionUnidad } from "@/lib/unit-actions";
-import { eur } from "@/lib/format";
+import { eur, mesLabel } from "@/lib/format";
 import {
   sumar,
   ocupacionDe,
   adrDe,
   revparDe,
-  noiTTM,
   estadoDatos,
   mesPorDefecto,
   etiquetaPeriodo,
@@ -68,8 +69,9 @@ export default async function UnidadesPage({
     potencial: number;
   }[] = [];
 
+  const datos = new Map(unidades.map((u) => [u.listingId, datosUnidad(ctx, u)]));
   for (const u of unidades) {
-    const d = datosUnidad(ctx, u);
+    const d = datos.get(u.listingId)!;
     filas.push({
       listingId: u.listingId,
       nombre: u.displayName,
@@ -82,6 +84,8 @@ export default async function UnidadesPage({
       caja: d.caja,
       rendimiento: u.tipo === "propiedad" ? d.nt.yieldPct : u.tipo === "master_lease" ? d.nt.margenPct : null,
       rendimientoTipo: u.tipo === "propiedad" ? "yield" : u.tipo === "master_lease" ? "margen" : null,
+      rendimientoAnualizado: u.tipo === "propiedad" && d.nt.anualizado,
+      mesesOperando: d.nt.mesesOperando,
       occBreakEven: d.occBreakEven,
       occTTM: ocupacionDe(d.rTTM),
       rating90: d.rating?.media ?? null,
@@ -115,22 +119,32 @@ export default async function UnidadesPage({
     unidades.map(finDe),
     unidades.length,
   );
-  const cashTTMp = seriePnLCash(
-    ctx.seriePortfolioTTM,
-    ctx.seriePortfolioTTM,
-    unidades.map(finDe),
-    unidades.length,
-  );
   const ratingTot = [...ctx.ratings.values()].reduce(
     (a, r) => ({ suma: a.suma + r.media * r.n, n: a.n + r.n }),
     { suma: 0, n: 0 },
   );
-  const costeOwned = unidades
-    .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
-    .reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
-  const noiTTMOwned = unidades
-    .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
-    .reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+  // Yield de cartera sobre el ritmo anual de cada unidad en propiedad.
+  const propiasConRitmo = unidades.filter(
+    (u) => u.tipo === "propiedad" && u.costeAdquisicion && datos.get(u.listingId)!.nt.noiAnual !== null,
+  );
+  const costeOwned = propiasConRitmo.reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
+  const noiAnualOwned = propiasConRitmo.reduce((s, u) => s + (datos.get(u.listingId)!.nt.noiAnual ?? 0), 0);
+  // Equilibrio de cartera: suma de las bases de cada unidad (meses operados).
+  const baseTot = unidades.reduce(
+    (a, u) => {
+      const b = datos.get(u.listingId)!.baseEquilibrio;
+      return {
+        netos: a.netos + b.netos,
+        costesVariables: a.costesVariables + b.costesVariables,
+        costesFijos: a.costesFijos + b.costesFijos,
+        vendidas: a.vendidas + b.vendidas,
+        disponibles: a.disponibles + b.disponibles,
+        overhead: a.overhead + b.overhead,
+        servicioDeuda: a.servicioDeuda + b.servicioDeuda,
+      };
+    },
+    { netos: 0, costesVariables: 0, costesFijos: 0, vendidas: 0, disponibles: 0, overhead: 0, servicioDeuda: 0 },
+  );
   const v30Port = ctx.fwd.portfolio.find((v) => v.dias === 30);
   const total: FilaMando = {
     listingId: "__total__",
@@ -142,17 +156,10 @@ export default async function UnidadesPage({
     netos: rPortfolio.netos,
     noi: rPortfolio.noi,
     caja: cashPortfolio.reduce((s, m) => s + m.caja, 0),
-    rendimiento: costeOwned > 0 ? (noiTTMOwned / costeOwned) * 100 : null,
+    rendimiento: costeOwned > 0 ? (noiAnualOwned / costeOwned) * 100 : null,
     rendimientoTipo: "yield",
-    occBreakEven: breakEvenOcc({
-      netos: rTTMp.netos,
-      costesVariables: rTTMp.costesVariables,
-      costesFijos: rTTMp.costesFijos,
-      vendidas: rTTMp.vendidas,
-      disponibles: rTTMp.disponibles,
-      overhead: cashTTMp.reduce((s, m) => s + m.overhead, 0),
-      servicioDeuda: cashTTMp.reduce((s, m) => s + m.intereses + m.principal, 0),
-    }),
+    rendimientoAnualizado: propiasConRitmo.some((u) => datos.get(u.listingId)!.nt.anualizado),
+    occBreakEven: breakEvenOcc(baseTot),
     occTTM: ocupacionDe(rTTMp),
     rating90: ratingTot.n > 0 ? ratingTot.suma / ratingTot.n : null,
     numReviews90: ratingTot.n,
@@ -164,6 +171,7 @@ export default async function UnidadesPage({
   };
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
+  const diag = await diagnosticoOcupacion(unidades, mesesTTM);
   const potencialTotal = accionesPorUnidad.reduce((s, a) => s + a.potencial, 0);
 
   // Ocupacion y ADR futuros por unidad (on the books).
@@ -202,6 +210,15 @@ export default async function UnidadesPage({
           descripcion="Operación, resultado, rendimiento, reviews y cartera de cada unidad"
         />
         <UnitsCommandTable filas={filas} total={total} mes={mes} />
+      </Card>
+
+      <Card>
+        <div id="ocupacion" className="scroll-mt-20" />
+        <CardHeader
+          titulo="De dónde sale la ocupación de 12 meses"
+          descripcion={`12 meses cerrados, de ${mesLabel(mesesTTM[0])} a ${mesLabel(mesesTTM[mesesTTM.length - 1])}`}
+        />
+        <OccDiagnostico d={diag} />
       </Card>
 
       <Card>

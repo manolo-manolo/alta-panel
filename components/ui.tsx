@@ -67,13 +67,20 @@ export function DeltaBadge({
   fraccion,
   etiqueta,
   invertido = false,
+  titulo,
 }: {
   fraccion: number | null;
   etiqueta: string;
   invertido?: boolean;
+  /** Explicacion al pasar el raton (que se compara exactamente). */
+  titulo?: string;
 }) {
   if (fraccion === null) {
-    return <span className="text-xs text-faint">{etiqueta ? `${etiqueta}: sin dato` : "sin dato"}</span>;
+    return (
+      <span className="text-xs text-faint" title={titulo}>
+        {etiqueta ? `${etiqueta}: sin dato` : "sin dato"}
+      </span>
+    );
   }
   const plano = Math.abs(fraccion) < 0.005;
   const sube = fraccion > 0;
@@ -85,7 +92,7 @@ export function DeltaBadge({
       : "bg-bad-soft text-bad";
   const Icono = plano ? Minus : sube ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs">
+    <span className="inline-flex items-center gap-1.5 text-xs" title={titulo}>
       <span
         className={`tabular inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-medium ${estilo}`}
       >
@@ -102,16 +109,25 @@ export function KpiCard({
   value,
   deltaMoM,
   deltaYoY,
+  deltaLfl,
   sub,
   etiquetaMoM = "vs mes ant.",
+  etiquetaYoY = "vs año ant.",
+  tituloYoY,
+  tituloLfl,
   invertido = false,
 }: {
   label: string;
   value: string;
   deltaMoM?: number | null;
   deltaYoY?: number | null;
+  /** Variacion interanual like-for-like (mismas unidades y meses). */
+  deltaLfl?: number | null;
   sub?: string;
   etiquetaMoM?: string;
+  etiquetaYoY?: string;
+  tituloYoY?: string;
+  tituloLfl?: string;
   invertido?: boolean;
 }) {
   return (
@@ -121,13 +137,26 @@ export function KpiCard({
         {value}
       </span>
       {sub && <span className="mt-0.5 text-xs text-muted">{sub}</span>}
-      {(deltaMoM !== undefined || deltaYoY !== undefined) && (
+      {(deltaMoM !== undefined || deltaYoY !== undefined || deltaLfl !== undefined) && (
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5">
           {deltaMoM !== undefined && (
             <DeltaBadge fraccion={deltaMoM ?? null} etiqueta={etiquetaMoM} invertido={invertido} />
           )}
           {deltaYoY !== undefined && (
-            <DeltaBadge fraccion={deltaYoY ?? null} etiqueta="vs año ant." invertido={invertido} />
+            <DeltaBadge
+              fraccion={deltaYoY ?? null}
+              etiqueta={etiquetaYoY}
+              invertido={invertido}
+              titulo={tituloYoY}
+            />
+          )}
+          {deltaLfl !== undefined && (
+            <DeltaBadge
+              fraccion={deltaLfl ?? null}
+              etiqueta="mismas unidades"
+              invertido={invertido}
+              titulo={tituloLfl}
+            />
           )}
         </div>
       )}

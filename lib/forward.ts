@@ -1,6 +1,7 @@
 import "server-only";
 import { query } from "@/lib/db";
 import { hoyMadrid, sumarDias } from "@/lib/time";
+import { fechaCobertura, sqlInventario } from "@/lib/inventario";
 
 // ---------------------------------------------------------------------------
 // KPIs a futuro (on the books): ocupacion, ADR, RevPAR y revenue de las
@@ -119,26 +120,18 @@ async function availVentanas(
   const filtros = cortes
     .map(
       (_, i) =>
-        `COUNT(*) FILTER (WHERE a.is_available AND a.date < $${i + 2}) AS d${i},
-         COUNT(*) FILTER (WHERE a.is_blocked AND a.date < $${i + 2}) AS b${i}`,
+        `COUNT(*) FILTER (WHERE a.disponible AND a.date < $${i + 2}) AS d${i},
+         COUNT(*) FILTER (WHERE a.bloqueada AND a.date < $${i + 2}) AS b${i}`,
     )
     .join(",\n");
+  // Inventario efectivo (lib/inventario.ts), igual que las metricas mensuales.
   const rows = await query<Record<string, string | number>>(
-    `WITH starts AS (
-       SELECT l.id AS listing_id,
-              COALESCE(s.fecha_inicio,
-                       (SELECT MIN(night) FROM reservation_nights n WHERE n.listing_id = l.id)
-              ) AS inicio
-       FROM listings l LEFT JOIN unit_settings s ON s.listing_id = l.id
-     )
+    `WITH ${sqlInventario(`$${cortes.length + 2}`)}
      SELECT a.listing_id, ${filtros}
-     FROM listing_availability a
-     JOIN starts st ON st.listing_id = a.listing_id
+     FROM inventario a
      WHERE a.date >= $1 AND a.date < $${cortes.length + 1}
-       AND st.inicio IS NOT NULL
-       AND a.date >= st.inicio
      GROUP BY a.listing_id`,
-    [desde, ...cortes],
+    [desde, ...cortes, fechaCobertura()],
   );
   const m = new Map<string, BucketAvail>();
   for (const r of rows) {

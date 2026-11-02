@@ -117,33 +117,93 @@ export interface TotalesCaja {
   caja: number;
 }
 
-/** Lectura automatica del P&L de caja (DSCR, caja, overhead, cash-on-cash). */
-export function lecturaCaja(t: TotalesCaja, equity: number, esUnidad: boolean): Insight[] {
+/**
+ * Caja a ritmo anual. Hace falta cuando el alcance tiene unidades con menos de
+ * 12 meses operando: su caja "de 12 meses" son solo unos meses de NOI contra
+ * deuda que a veces ya corria antes del arranque.
+ * Caja = NOI anual (anualizado por unidad) - overhead anual - cuota actual x 12.
+ */
+export interface RitmoCaja {
+  noi: number;
+  servicioAnual: number;
+  caja: number;
+  dscr: number | null;
+  cashOnCash: number | null; // %
+  equity: number; // equity de las unidades incluidas en el ritmo
+  parciales: string[]; // unidades anualizadas
+}
+
+export function ritmoCaja(p: {
+  noiAnual: number;
+  overheadAnual: number;
+  servicioMensual: number; // intereses + principal del ultimo mes del alcance
+  equity: number;
+  parciales: string[];
+}): RitmoCaja {
+  const servicioAnual = p.servicioMensual * 12;
+  const caja = p.noiAnual - p.overheadAnual - servicioAnual;
+  return {
+    noi: p.noiAnual,
+    servicioAnual,
+    caja,
+    dscr: servicioAnual > 0 ? p.noiAnual / servicioAnual : null,
+    cashOnCash: p.equity > 0 ? (caja / p.equity) * 100 : null,
+    equity: p.equity,
+    parciales: p.parciales,
+  };
+}
+
+function listaNombres(n: string[]): string {
+  return n.length <= 1 ? (n[0] ?? "") : `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}`;
+}
+
+/**
+ * Lectura automatica del P&L de caja (DSCR, caja, overhead, cash-on-cash).
+ * Con `ritmo` (unidades con menos de 12 meses), las alertas de DSCR y caja se
+ * deciden sobre el ritmo anual y el texto da las dos cifras.
+ */
+export function lecturaCaja(
+  t: TotalesCaja,
+  equity: number,
+  esUnidad: boolean,
+  ritmo: RitmoCaja | null = null,
+): Insight[] {
   const out: Insight[] = [];
   const servicio = t.intereses + t.principal;
-  const dscr = servicio > 0 ? t.noi / servicio : null;
+  const conRitmo = !!ritmo && ritmo.parciales.length > 0;
+  const nota = conRitmo
+    ? ` (a ritmo anual: ${listaNombres(ritmo!.parciales)} lleva${ritmo!.parciales.length > 1 ? "n" : ""} menos de un año operando)`
+    : "";
+  const dscrReal = servicio > 0 ? t.noi / servicio : null;
+  const dscr = conRitmo ? ritmo!.dscr : dscrReal;
   const cashOnCash = equity > 0 ? (t.caja / equity) * 100 : null;
+  const fx = (x: number) => x.toFixed(2).replace(".", ",");
 
   if (dscr !== null && dscr < 1.2) {
     out.push({
       tono: "alerta",
-      texto: `DSCR TTM de ${dscr.toFixed(2).replace(".", ",")}x: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o más). Sube NOI o alarga plazo antes de apalancar más.`,
+      texto: `DSCR de ${fx(dscr)}x${nota}: el NOI cubre justo el servicio de deuda (la banca suele exigir 1,2x o más). Sube NOI o alarga plazo antes de apalancar más.`,
     });
   } else if (dscr !== null && dscr >= 1.5) {
     out.push({
       tono: "bueno",
-      texto: `DSCR TTM de ${dscr.toFixed(2).replace(".", ",")}x: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
+      texto: `DSCR de ${fx(dscr)}x${nota}: el NOI cubre con holgura el servicio de deuda. Hay margen para apalancar nuevas adquisiciones sin estresar la caja.`,
     });
   }
-  if (t.caja < 0) {
+  if (conRitmo && t.caja < 0 && ritmo!.caja >= 0) {
+    out.push({
+      tono: "info",
+      texto: `Caja neta de 12 meses negativa (${eur(t.caja)}) por la rampa de ${listaNombres(ritmo!.parciales)}: a ritmo anual el alcance genera ${eur(ritmo!.caja)} tras overhead y deuda.`,
+    });
+  } else if (t.caja < 0) {
     out.push({
       tono: "alerta",
-      texto: `Caja neta TTM negativa (${eur(t.caja)}): tras overhead y deuda el negocio consume caja. Mira qué línea pesa más: overhead ${eur(t.overhead)}, intereses ${eur(t.intereses)}, principal ${eur(t.principal)}.`,
+      texto: `Caja neta de 12 meses negativa (${eur(t.caja)}): tras overhead y deuda el negocio consume caja. Mira qué línea pesa más: overhead ${eur(t.overhead)}, intereses ${eur(t.intereses)}, principal ${eur(t.principal)}.`,
     });
   } else if (t.caja > 0 && t.ing > 0) {
     out.push({
       tono: "bueno",
-      texto: `Generación de caja TTM de ${eur(t.caja)} (${pct(t.caja / t.ing)} de los ingresos), ya descontados overhead, intereses y amortización. La amortización (${eur(t.principal)}) además construye patrimonio: no es gasto perdido.`,
+      texto: `Generación de caja de 12 meses de ${eur(t.caja)} (${pct(t.caja / t.ing)} de los ingresos), ya descontados overhead, intereses y amortización. La amortización (${eur(t.principal)}) además construye patrimonio: no es gasto perdido.`,
     });
   }
   if (t.noi > 0 && t.overhead / t.noi >= 0.35) {
@@ -152,10 +212,15 @@ export function lecturaCaja(t: TotalesCaja, equity: number, esUnidad: boolean): 
       texto: `El overhead corporativo se come el ${pct(t.overhead / t.noi)} del NOI${esUnidad ? " asignado a esta unidad" : ""}. A este tamaño de cartera, cada nueva unidad diluye ese peso: es el argumento para escalar (o para contener estructura).`,
     });
   }
-  if (cashOnCash !== null) {
+  if (conRitmo && ritmo!.cashOnCash !== null) {
+    out.push({
+      tono: ritmo!.cashOnCash >= 8 ? "bueno" : "info",
+      texto: `Cash-on-cash a ritmo anual del ${pctDirecto(ritmo!.cashOnCash)} sobre el equity invertido (${eur(ritmo!.equity)}): NOI anualizado y la cuota de deuda actual durante 12 meses. El real de 12 meses (${cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}) solo recoge los meses operados de ${listaNombres(ritmo!.parciales)}, con la cuota de entonces. Referencia sana en vacacional apalancado: 8-12%.`,
+    });
+  } else if (cashOnCash !== null) {
     out.push({
       tono: cashOnCash >= 8 ? "bueno" : "info",
-      texto: `Cash-on-cash TTM del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisición menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
+      texto: `Cash-on-cash de 12 meses del ${pctDirecto(cashOnCash)} sobre el equity invertido (${eur(equity)}, coste de adquisición menos deuda inicial real). Referencia sana en vacacional apalancado: 8-12%.`,
     });
   }
   if (servicio === 0 && esUnidad) {

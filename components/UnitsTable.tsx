@@ -18,6 +18,9 @@ export interface FilaUnidad {
   noiTTM: number;
   rendimiento: number | null;
   rendimientoTipo: "yield" | "margen" | null;
+  /** Yield sobre ritmo anual: la unidad opero menos de 12 meses. */
+  rendimientoAnualizado?: boolean;
+  mesesOperando?: number;
   estado: Semaforo | null;
   costesPendientes: boolean;
 }
@@ -74,10 +77,16 @@ export default function UnitsTable({
         f.rendimiento === null ? (
           <span className="text-faint">-</span>
         ) : (
-          <span>
+          <span
+            title={
+              f.rendimientoAnualizado
+                ? `Anualizado: ${f.mesesOperando !== undefined ? `${Math.round(f.mesesOperando)} meses operando` : "menos de 12 meses operando"}, ajustado por estacionalidad`
+                : undefined
+            }
+          >
             {pctDirecto(f.rendimiento)}
             <span className="ml-1 text-xs text-faint">
-              {f.rendimientoTipo === "yield" ? "yield" : "margen"}
+              {f.rendimientoTipo === "yield" ? (f.rendimientoAnualizado ? "anual." : "yield") : "margen"}
             </span>
           </span>
         ),

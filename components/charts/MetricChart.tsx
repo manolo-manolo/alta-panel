@@ -27,6 +27,15 @@ export interface TotalesChart {
   adr: number | null;
   occ: number | null;
 }
+/** Comparacion interanual homogenea de los totales (ver compararInteranual). */
+export interface ComparacionChart {
+  meses: number; // meses comparables (12 = ano completo)
+  act: TotalesChart;
+  prior: TotalesChart;
+  lfl: { act: TotalesChart; prior: TotalesChart } | null; // null si no difiere del total
+}
+
+type Clave = keyof TotalesChart;
 
 type Metric = "inoi" | "adr" | "occ";
 
@@ -34,28 +43,41 @@ const COLOR_REV = "#8fd3cb";
 const COLOR_NOI = "#0a5f59";
 const COLOR_LINE = "#0a5f59";
 
+function variacion(a: number | null, b: number | null): number | null {
+  return a !== null && b !== null && b !== 0 ? (a - b) / Math.abs(b) : null;
+}
+
+function Linea({ v, texto }: { v: number | null; texto: string }) {
+  if (v === null) return null;
+  return (
+    <span className={`tabular text-xs font-medium ${v >= 0 ? "text-ok" : "text-bad"}`}>
+      {v >= 0 ? "+" : "-"}
+      {pct(Math.abs(v))} <span className="font-normal text-faint">{texto}</span>
+    </span>
+  );
+}
+
 function Total({
   label,
   valor,
-  actual,
-  previo,
+  clave,
+  cmp,
 }: {
   label: string;
   valor: string;
-  actual: number | null;
-  previo: number | null;
+  clave: Clave;
+  cmp: ComparacionChart | null;
 }) {
-  const v = actual !== null && previo !== null && previo !== 0 ? (actual - previo) / Math.abs(previo) : null;
+  const v = cmp && cmp.meses > 0 ? variacion(cmp.act[clave], cmp.prior[clave]) : null;
+  const vLfl = cmp?.lfl && cmp.meses > 0 ? variacion(cmp.lfl.act[clave], cmp.lfl.prior[clave]) : null;
+  const sufijo = cmp && cmp.meses < 12 ? ` (${cmp.meses} meses comparables)` : "";
   return (
     <div>
       <div className="text-xs font-medium text-muted">{label}</div>
-      <div className="mt-0.5 flex items-baseline gap-2">
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="tabular text-lg font-semibold tracking-tight text-ink">{valor}</span>
-        {v !== null && (
-          <span className={`tabular text-xs font-medium ${v >= 0 ? "text-ok" : "text-bad"}`}>
-            {v >= 0 ? "+" : "-"}{pct(Math.abs(v))} vs 12 meses ant.
-          </span>
-        )}
+        <Linea v={v} texto={`vs año ant.${sufijo}`} />
+        <Linea v={vLfl} texto="mismas unidades" />
       </div>
     </div>
   );
@@ -64,11 +86,11 @@ function Total({
 export default function MetricChart({
   data,
   ttm,
-  ttmPrev,
+  cmp,
 }: {
   data: PuntoChart[];
   ttm: TotalesChart;
-  ttmPrev: TotalesChart;
+  cmp: ComparacionChart | null;
 }) {
   const [metric, setMetric] = useState<Metric>("inoi");
 
@@ -86,15 +108,15 @@ export default function MetricChart({
         <div className="flex flex-wrap gap-x-6 gap-y-2">
           {metric === "inoi" && (
             <>
-              <Total label="Ingresos 12 meses" valor={eur(ttm.ingresos)} actual={ttm.ingresos} previo={ttmPrev.ingresos} />
-              <Total label="NOI 12 meses" valor={eur(ttm.noi)} actual={ttm.noi} previo={ttmPrev.noi} />
+              <Total label="Ingresos 12 meses" valor={eur(ttm.ingresos)} clave="ingresos" cmp={cmp} />
+              <Total label="NOI 12 meses" valor={eur(ttm.noi)} clave="noi" cmp={cmp} />
             </>
           )}
           {metric === "adr" && (
-            <Total label="ADR 12 meses" valor={eur(ttm.adr)} actual={ttm.adr} previo={ttmPrev.adr} />
+            <Total label="ADR 12 meses" valor={eur(ttm.adr)} clave="adr" cmp={cmp} />
           )}
           {metric === "occ" && (
-            <Total label="Ocupación 12 meses" valor={pct(ttm.occ)} actual={ttm.occ} previo={ttmPrev.occ} />
+            <Total label="Ocupación 12 meses" valor={pct(ttm.occ)} clave="occ" cmp={cmp} />
           )}
         </div>
         <div className="flex items-center gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5" role="group" aria-label="Métrica">

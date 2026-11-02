@@ -8,12 +8,14 @@ import {
   type TipoUnidad,
 } from "@/lib/config";
 import {
+  diffDias,
   hoyMadrid,
   mesActualMadrid,
   meses12,
   mesesYTD,
   sumarMeses,
 } from "@/lib/time";
+import { fechaCobertura, mesCobertura, sqlInventario } from "@/lib/inventario";
 
 const VARIABLES = CATEGORIAS_VARIABLES as unknown as string[];
 const FIJAS = CATEGORIAS_FIJAS as unknown as string[];
@@ -27,8 +29,13 @@ export interface UnidadInfo {
   tipo: TipoUnidad | null;
   costeAdquisicion: number | null;
   rentaMensual: number | null;
-  fechaInicio: string | null;
-  primeraNoche: string | null; // primera noche vendida (inicio de operacion real)
+  fechaInicio: string | null; // fecha configurada: Ajustes o, si no, la hoja de costes
+  primeraNoche: string | null; // primera noche vendida sincronizada
+  ultimaNoche: string | null; // ultima noche vendida sincronizada
+  // Ventana de operacion, la misma que usa el inventario (lib/inventario.ts):
+  inicioOperacion: string | null; // fechaInicio o, si no hay, primera noche vendida
+  finOperacion: string | null; // null si esta activo; ultima noche vendida si se dio de baja
+  fuenteInicio: "ajustes" | "hoja" | "primera_noche" | null;
 }
 
 export interface UnidadMes {
@@ -83,7 +90,10 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
     coste: number | null;
     renta: number | null;
     fecha_inicio: string | null;
+    fecha_ajustes: string | null;
+    fecha_hoja: string | null;
     primera_noche: string | null;
+    ultima_noche: string | null;
   }>(
     `SELECT l.id, l.nickname, l.active,
             COALESCE(s.display_name, l.nickname)                              AS display_name,
@@ -91,7 +101,10 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
             COALESCE(s.coste_total_adquisicion_eur, u.coste_total_adquisicion_eur) AS coste,
             COALESCE(s.renta_mensual_eur, u.renta_mensual_eur)               AS renta,
             COALESCE(s.fecha_inicio, u.fecha_inicio)                          AS fecha_inicio,
-            (SELECT MIN(n.night) FROM reservation_nights n WHERE n.listing_id = l.id) AS primera_noche
+            s.fecha_inicio                                                    AS fecha_ajustes,
+            u.fecha_inicio                                                    AS fecha_hoja,
+            (SELECT MIN(n.night) FROM reservation_nights n WHERE n.listing_id = l.id) AS primera_noche,
+            (SELECT MAX(n.night) FROM reservation_nights n WHERE n.listing_id = l.id) AS ultima_noche
      FROM listings l
      LEFT JOIN units_meta u ON u.unidad = l.nickname
      LEFT JOIN unit_settings s ON s.listing_id = l.id
@@ -107,6 +120,16 @@ export async function getUnidades(): Promise<UnidadInfo[]> {
     rentaMensual: r.renta,
     fechaInicio: r.fecha_inicio,
     primeraNoche: r.primera_noche,
+    ultimaNoche: r.ultima_noche,
+    inicioOperacion: r.fecha_inicio ?? r.primera_noche,
+    finOperacion: r.active ? null : (r.ultima_noche ?? "1900-01-01"),
+    fuenteInicio: r.fecha_ajustes
+      ? "ajustes"
+      : r.fecha_hoja
+        ? "hoja"
+        : r.primera_noche
+          ? "primera_noche"
+          : null,
   }));
 }
 
@@ -178,32 +201,22 @@ async function nightsPorUnidadMes(
 }
 
 async function availPorUnidadMes(meses: string[]): Promise<Map<string, AvailAgg>> {
-  // Solo se cuentan noches desde que la unidad empezo a operar (primera noche
-  // vendida o fecha_inicio configurada), para no distorsionar la ocupacion de
-  // unidades nuevas (p. ej. Paco Romo, Ibarra 2).
+  // Inventario efectivo (lib/inventario.ts): solo noches desde el inicio de
+  // operacion, sin listings dados de baja y sin noches ocupadas que no son venta.
   const rows = await query<{
     listing_id: string;
     mes: string;
     disponibles: string;
     bloqueadas: string;
   }>(
-    `WITH starts AS (
-       SELECT l.id AS listing_id,
-              COALESCE(s.fecha_inicio,
-                       (SELECT MIN(night) FROM reservation_nights n WHERE n.listing_id = l.id)
-              ) AS inicio
-       FROM listings l LEFT JOIN unit_settings s ON s.listing_id = l.id
-     )
-     SELECT a.listing_id, a.mes,
-            COUNT(*) FILTER (WHERE a.is_available) AS disponibles,
-            COUNT(*) FILTER (WHERE a.is_blocked) AS bloqueadas
-     FROM listing_availability a
-     JOIN starts st ON st.listing_id = a.listing_id
-     WHERE a.mes = ANY($1)
-       AND st.inicio IS NOT NULL
-       AND a.date >= st.inicio
-     GROUP BY a.listing_id, a.mes`,
-    [meses],
+    `WITH ${sqlInventario("$2")}
+     SELECT listing_id, mes,
+            COUNT(*) FILTER (WHERE disponible) AS disponibles,
+            COUNT(*) FILTER (WHERE bloqueada) AS bloqueadas
+     FROM inventario
+     WHERE mes = ANY($1)
+     GROUP BY listing_id, mes`,
+    [meses, fechaCobertura()],
   );
   const m = new Map<string, AvailAgg>();
   for (const r of rows) {
@@ -774,11 +787,25 @@ export async function estadoDatos(): Promise<EstadoDatos> {
 }
 
 // --- Utilidades de fechas para las vistas ---
+/**
+ * Mes por defecto de las vistas: el ultimo mes CERRADO. El mes en curso solo
+ * tiene unos dias vividos y el resto son reservas futuras, asi que como vista
+ * por defecto (y dentro de un TTM) hundiria ocupacion, ingresos y caja.
+ */
 export function mesPorDefecto(): string {
-  return mesActualMadrid();
+  return sumarMeses(mesActualMadrid(), -1);
 }
+/** True si el mes aun no ha terminado (mes en curso o futuro). */
+export function mesAbierto(mes: string): boolean {
+  return mes >= mesActualMadrid();
+}
+/**
+ * TTM: los 12 meses CERRADOS que terminan en `mes`. Si `mes` es el mes en
+ * curso o uno futuro, termina en el ultimo mes cerrado.
+ */
 export function ttm(mes: string): string[] {
-  return meses12(mes);
+  const cerrado = mesPorDefecto();
+  return meses12(mes > cerrado ? cerrado : mes);
 }
 export function ytd(mes: string): string[] {
   return mesesYTD(mes);
@@ -814,10 +841,13 @@ const MESES_NOMBRE = [
 export function etiquetaPeriodo(mes: string, p: Periodo): string {
   const ano = mes.slice(0, 4);
   const nombre = MESES_NOMBRE[Number(mes.slice(5, 7)) - 1] ?? "";
-  if (p === "ytd") return `Acumulado ${ano} hasta ${nombre}`;
-  if (p === "ttm") return `Últimos 12 meses hasta ${nombre} ${ano}`;
+  // El mes en curso mezcla noches vividas y reservas futuras; un mes futuro
+  // solo tiene reservas. Se marca para no leerlo como un mes cerrado.
+  const estado = mes > mesActualMadrid() ? " (reservas)" : mes === mesActualMadrid() ? " (en curso)" : "";
+  if (p === "ytd") return `Acumulado ${ano} hasta ${nombre}${estado}`;
+  if (p === "ttm") return `Últimos 12 meses hasta ${nombre} ${ano}${estado}`;
   if (p === "ano") return `Año ${ano}`;
-  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${ano}`;
+  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${ano}${estado}`;
 }
 
 /** Rango de fechas [desde, hastaExcl) que cubre un conjunto de meses. */
@@ -834,27 +864,204 @@ export function desplazarMeses(meses: string[], delta: number): string[] {
   return meses.map((m) => sumarMeses(m, delta));
 }
 
+// --- Comparacion interanual homogenea ---
+
+/** Fraccion operativa minima para que un mes cuente como "operando" en like-for-like. */
+const FRACCION_LFL = 0.9;
+
+export interface ComparacionYoY {
+  /** Meses del periodo cuyo mes del ano anterior tiene historico completo. */
+  meses: string[];
+  /** Todas las unidades, solo meses comparables. */
+  act: Rollup;
+  prior: Rollup;
+  /** Like-for-like: misma unidad y mismo mes, operando en los dos anos. */
+  lfl: { act: Rollup; prior: Rollup; unidades: number };
+  /** True si el like-for-like deja fuera algo (unidades nuevas, bajas, rampas). */
+  lflDistinto: boolean;
+}
+
+/**
+ * Compara un periodo con el mismo periodo del ano anterior sin trampas:
+ *  - Solo meses cuyo ano anterior esta dentro del historico sincronizado (el
+ *    sync guarda 18 meses: compararlo con meses vacios inflaria el crecimiento).
+ *  - Ademas del total, el like-for-like: solo pares unidad-mes en los que la
+ *    unidad operaba los dos anos, para separar crecimiento por compras del
+ *    crecimiento por gestion.
+ * `map` debe incluir los meses del periodo y los del ano anterior.
+ */
+export function compararInteranual(
+  map: Map<string, UnidadMes>,
+  unidades: UnidadInfo[],
+  meses: string[],
+  mesCob: string = mesCobertura(),
+): ComparacionYoY {
+  const mesesCmp = meses.filter((m) => sumarMeses(m, -12) >= mesCob);
+  const act: UnidadMes[] = [];
+  const prior: UnidadMes[] = [];
+  const lflAct: UnidadMes[] = [];
+  const lflPrior: UnidadMes[] = [];
+  const lflUnidades = new Set<string>();
+  let lflDistinto = false;
+  for (const u of unidades) {
+    for (const m of mesesCmp) {
+      const mPrev = sumarMeses(m, -12);
+      const a = map.get(`${u.listingId}|${m}`);
+      const p = map.get(`${u.listingId}|${mPrev}`);
+      if (a) act.push(a);
+      if (p) prior.push(p);
+      const fa = fraccionOperativa(u, m);
+      const fp = fraccionOperativa(u, mPrev);
+      if (fa >= FRACCION_LFL && fp >= FRACCION_LFL) {
+        if (a) lflAct.push(a);
+        if (p) lflPrior.push(p);
+        lflUnidades.add(u.listingId);
+      } else if (fa > 0 || fp > 0) {
+        lflDistinto = true;
+      }
+    }
+  }
+  return {
+    meses: mesesCmp,
+    act: sumar(act),
+    prior: sumar(prior),
+    lfl: { act: sumar(lflAct), prior: sumar(lflPrior), unidades: lflUnidades.size },
+    lflDistinto,
+  };
+}
+
+// --- Operacion parcial: fraccion operativa y anualizacion ---
+
+function diasDelMes(mes: string): number {
+  const [y, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+/**
+ * Fraccion (0-1) del mes en la que la unidad estaba operando. Usa la misma
+ * ventana que el inventario (lib/inventario.ts): inicioOperacion..finOperacion.
+ */
+export function fraccionOperativa(u: UnidadInfo, mes: string): number {
+  const ini = u.inicioOperacion;
+  if (!ini) return 0;
+  const dias = diasDelMes(mes);
+  const primero = `${mes}-01`;
+  const ultimo = `${mes}-${String(dias).padStart(2, "0")}`;
+  const desde = ini > primero ? ini : primero;
+  const hasta = u.finOperacion && u.finOperacion < ultimo ? u.finOperacion : ultimo;
+  if (desde > hasta) return 0;
+  return (diffDias(desde, hasta) + 1) / dias;
+}
+
+/** Meses (con decimales) que la unidad opero dentro de un conjunto de meses. */
+export function mesesOperando(u: UnidadInfo, meses: string[]): number {
+  return meses.reduce((s, m) => s + fraccionOperativa(u, m), 0);
+}
+
+/**
+ * Peso estacional de cada mes del TTM: ingresos netos de las unidades que
+ * operaron los 12 meses enteros. Sirve para anualizar una unidad nueva sin
+ * multiplicar sin mas: tres meses de verano no valen un cuarto del ano.
+ * null si ninguna unidad tiene el ano completo (se usa reparto uniforme).
+ */
+export function pesosEstacionales(
+  map: Map<string, UnidadMes>,
+  unidades: UnidadInfo[],
+  mesesTTM: string[],
+): Map<string, number> | null {
+  const maduras = unidades.filter((u) =>
+    mesesTTM.every((m) => fraccionOperativa(u, m) >= 0.999),
+  );
+  if (maduras.length === 0) return null;
+  const pesos = new Map<string, number>();
+  let total = 0;
+  for (const m of mesesTTM) {
+    const v = maduras.reduce(
+      (s, u) => s + Math.max(0, map.get(`${u.listingId}|${m}`)?.netos ?? 0),
+      0,
+    );
+    pesos.set(m, v);
+    total += v;
+  }
+  return total > 0 ? pesos : null;
+}
+
 // --- NOI TTM y yield/margen por unidad ---
 export interface NoiTTM {
-  noiTTM: number;
-  netosTTM: number;
-  yieldPct: number | null; // solo propiedad
-  margenPct: number | null; // solo master lease
+  noiTTM: number; // real de los 12 meses
+  netosTTM: number; // real de los 12 meses
+  // Ritmo anual: igual al real si la unidad opero el ano entero; anualizado
+  // (estacionalidad del portfolio) si opero menos; null si menos de 2 meses.
+  noiAnual: number | null;
+  netosAnual: number | null;
+  mesesOperando: number; // dentro del TTM, con decimales
+  anualizado: boolean; // true si opero menos del ano: yield sobre ritmo anual
+  yieldPct: number | null; // solo propiedad, sobre NOI anual
+  margenPct: number | null; // solo master lease (ratio, no necesita anualizar)
 }
+
+/** Minimo de meses operando para dar un ritmo anual (con menos es ruido). */
+export const MESES_MIN_ANUALIZAR = 2;
+
 export function noiTTM(
   u: UnidadInfo,
   map: Map<string, UnidadMes>,
   mesesTTM: string[],
+  pesos: Map<string, number> | null = null,
 ): NoiTTM {
   const items = mesesTTM
     .map((mes) => map.get(`${u.listingId}|${mes}`))
     .filter((x): x is UnidadMes => !!x);
   const r = sumar(items);
+  const fr = mesesTTM.map((m) => ({ m, f: fraccionOperativa(u, m) }));
+  const nOper = fr.reduce((s, x) => s + x.f, 0);
+  // Un listing dado de baja ya no tiene ritmo: no se anualiza ni suma al
+  // rendimiento de la cartera actual.
+  const deBaja = u.finOperacion !== null;
+  const completo = !deBaja && nOper >= mesesTTM.length - 0.5;
+
+  let noiAnual: number | null = null;
+  let netosAnual: number | null = null;
+  if (deBaja) {
+    // sin ritmo anual
+  } else if (completo) {
+    noiAnual = r.noi;
+    netosAnual = r.netos;
+  } else if (nOper >= MESES_MIN_ANUALIZAR) {
+    // Solo meses operados: los costes anteriores al arranque (puesta a punto)
+    // no son ritmo recurrente.
+    const op = fr.filter((x) => x.f > 0);
+    let netosObs = 0;
+    let varObs = 0;
+    let fijosObs = 0;
+    for (const { m } of op) {
+      const it = map.get(`${u.listingId}|${m}`);
+      netosObs += it?.netos ?? 0;
+      varObs += it?.costesVariables ?? 0;
+      fijosObs += it?.costesFijos ?? 0;
+    }
+    // Ingresos y costes variables siguen la estacionalidad; los fijos no.
+    const wTot = pesos ? mesesTTM.reduce((s, m) => s + (pesos.get(m) ?? 0), 0) : mesesTTM.length;
+    const wObs = pesos ? op.reduce((s, x) => s + (pesos.get(x.m) ?? 0) * x.f, 0) : nOper;
+    const factor = wObs > 0 ? wTot / wObs : mesesTTM.length / nOper;
+    netosAnual = netosObs * factor;
+    noiAnual = (netosObs - varObs) * factor - fijosObs * (12 / op.length);
+  }
+
   const yieldPct =
-    u.tipo === "propiedad" && u.costeAdquisicion && u.costeAdquisicion > 0
-      ? (r.noi / u.costeAdquisicion) * 100
+    u.tipo === "propiedad" && u.costeAdquisicion && u.costeAdquisicion > 0 && noiAnual !== null
+      ? (noiAnual / u.costeAdquisicion) * 100
       : null;
   const margenPct =
     u.tipo === "master_lease" && r.netos !== 0 ? (r.noi / r.netos) * 100 : null;
-  return { noiTTM: r.noi, netosTTM: r.netos, yieldPct, margenPct };
+  return {
+    noiTTM: r.noi,
+    netosTTM: r.netos,
+    noiAnual,
+    netosAnual,
+    mesesOperando: nOper,
+    anualizado: !deBaja && !completo,
+    yieldPct,
+    margenPct,
+  };
 }

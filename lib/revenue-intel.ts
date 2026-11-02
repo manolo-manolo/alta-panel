@@ -1,5 +1,6 @@
 import "server-only";
 import { query } from "@/lib/db";
+import { fechaCobertura, sqlInventario } from "@/lib/inventario";
 import { hoyMadrid, sumarDias, sumarMeses, mesActualMadrid } from "@/lib/time";
 import type { UnidadInfo, UnidadMes } from "@/lib/metrics";
 
@@ -86,15 +87,20 @@ async function inventarioDiario(desde: string, hastaExcl: string): Promise<Map<s
     is_blocked: boolean;
     reservado: boolean;
   }>(
-    `SELECT a.listing_id, a.date, a.is_available, a.is_blocked,
+    // Inventario efectivo (lib/inventario.ts): una noche ocupada por una
+    // reserva que no es venta (pendiente, propietario) cuenta como bloqueada,
+    // no como hueco que vender.
+    `WITH ${sqlInventario("$3")}
+     SELECT a.listing_id, a.date,
+            a.disponible AS is_available, a.bloqueada AS is_blocked,
             EXISTS (
               SELECT 1 FROM reservation_nights n
               WHERE n.listing_id = a.listing_id AND n.night = a.date
             ) AS reservado
-     FROM listing_availability a
+     FROM inventario a
      WHERE a.date >= $1 AND a.date < $2
      ORDER BY a.listing_id, a.date`,
-    [desde, hastaExcl],
+    [desde, hastaExcl, fechaCobertura()],
   );
   const m = new Map<string, DiaInv[]>();
   for (const r of rows) {
