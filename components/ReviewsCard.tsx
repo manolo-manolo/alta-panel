@@ -1,24 +1,10 @@
-import { ChevronDown, Star } from "lucide-react";
-import type { ResumenReviews, ReviewNo5 } from "@/lib/metrics";
-import { num, pct, fecha } from "@/lib/format";
-import { CANAL_LABEL, normalizarCanal } from "@/lib/config";
-
-function Estrellas({ rating }: { rating: number | null }) {
-  if (rating === null) return <span className="text-xs text-faint">sin nota</span>;
-  const llenas = Math.round(rating);
-  return (
-    <span className="inline-flex items-center gap-px" title={`${rating.toFixed(2)} / 5`} aria-label={`${rating.toFixed(1)} de 5`}>
-      {Array.from({ length: 5 }, (_, i) => (
-        <Star
-          key={i}
-          size={13}
-          className={i < llenas ? "fill-warn text-warn" : "fill-line text-line"}
-          aria-hidden
-        />
-      ))}
-    </span>
-  );
-}
+import { ArrowRight, ChevronDown, ThumbsDown, ThumbsUp } from "lucide-react";
+import type { ResumenReviews } from "@/lib/metrics";
+import type { ReviewCompleta } from "@/lib/review-analysis";
+import type { InsightsReviews } from "@/lib/review-insights";
+import Estrellas from "@/components/reviews/Estrellas";
+import ReviewItem from "@/components/reviews/ReviewItem";
+import { num, pct } from "@/lib/format";
 
 const coma = (n: number, d: number) => n.toFixed(d).replace(".", ",");
 
@@ -38,9 +24,16 @@ function Tile({ label, value, sub, extra }: { label: string; value: string; sub?
 export default function ReviewsCard({
   resumen,
   no5,
+  temas,
+  hrefTodas,
+  mostrarUnidad = true,
 }: {
   resumen: ResumenReviews;
-  no5: ReviewNo5[];
+  no5: ReviewCompleta[];
+  /** Temas de los ultimos 12 meses (lo que valoran y de lo que se quejan). */
+  temas?: InsightsReviews | null;
+  hrefTodas?: string;
+  mostrarUnidad?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -63,45 +56,56 @@ export default function ReviewsCard({
         />
       </div>
 
+      {temas && temas.analizadas > 0 && (temas.elogios.length > 0 || temas.quejas.length > 0) && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-line px-3.5 py-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted">
+              <ThumbsUp size={13} className="text-ok" aria-hidden />
+              Lo que más valoran (12 meses)
+            </div>
+            <p className="text-sm text-ink">
+              {temas.elogios.length
+                ? temas.elogios.slice(0, 4).map((t) => `${t.label} (${t.positivas})`).join(" · ")
+                : "Sin elogios concretos."}
+            </p>
+          </div>
+          <div className="rounded-lg border border-line px-3.5 py-3">
+            <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-muted">
+              <ThumbsDown size={13} className="text-bad" aria-hidden />
+              Quejas que se repiten (12 meses)
+            </div>
+            <p className="text-sm text-ink">
+              {temas.quejas.length
+                ? temas.quejas.slice(0, 4).map((t) => `${t.label} (${t.negativas})`).join(" · ")
+                : "Ninguna queja repetida."}
+            </p>
+          </div>
+        </div>
+      )}
+
       <details className="group rounded-lg border border-line">
         <summary className="flex cursor-pointer items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-medium text-ink hover:bg-surface-2">
           <span>Reviews por debajo de 5 estrellas ({no5.length})</span>
           <ChevronDown size={16} className="shrink-0 text-faint transition group-open:rotate-180" aria-hidden />
         </summary>
-        <div className="divide-y divide-line border-t border-line">
+        <div className="divide-y divide-line border-t border-line px-3.5">
           {no5.length === 0 ? (
-            <p className="px-3.5 py-3 text-sm text-muted">No hay reviews por debajo de 5 estrellas.</p>
+            <p className="py-3 text-sm text-muted">No hay reviews por debajo de 5 estrellas.</p>
           ) : (
-            no5.map((r) => (
-              <div key={r.id} className="px-3.5 py-3">
-                <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                  {r.unidad && (
-                    <span className="rounded-md bg-surface-3 px-1.5 py-px text-xs font-semibold text-muted">
-                      {r.unidad}
-                    </span>
-                  )}
-                  <Estrellas rating={r.rating} />
-                  <span className="tabular text-muted">
-                    {r.rating !== null ? coma(r.rating, 1) : "-"}
-                    {r.ratingScale === 10 && r.ratingRaw !== null ? ` (${r.ratingRaw}/10)` : ""}
-                  </span>
-                  <span className="text-faint">·</span>
-                  <span className="text-muted">{CANAL_LABEL[normalizarCanal(r.channel)]}</span>
-                  <span className="text-faint">·</span>
-                  <span className="text-faint">{fecha(r.fecha)}</span>
-                  {r.guest && (
-                    <>
-                      <span className="text-faint">·</span>
-                      <span className="text-muted">{r.guest}</span>
-                    </>
-                  )}
-                </div>
-                {r.content && <p className="text-sm leading-relaxed text-ink">{r.content}</p>}
-              </div>
-            ))
+            no5.map((r) => <ReviewItem key={r.id} r={r} mostrarUnidad={mostrarUnidad} />)
           )}
         </div>
       </details>
+
+      {hrefTodas && (
+        <a
+          href={hrefTodas}
+          className="inline-flex items-center gap-1 self-start text-sm font-medium text-brand transition hover:text-brand-ink"
+        >
+          Ver todas las reviews y el análisis
+          <ArrowRight size={14} aria-hidden />
+        </a>
+      )}
     </div>
   );
 }

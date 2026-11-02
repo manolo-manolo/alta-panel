@@ -160,6 +160,29 @@ CREATE TABLE IF NOT EXISTS reviews (
   raw            JSONB,
   synced_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ---------------------------------------------------------------------------
+-- Traduccion (castellano de Espana) y temas de cada review, por la API de
+-- Claude. Aparte de `reviews` porque el sync la vacia y reinserta. La app
+-- tambien la crea sola si no existe (lib/review-analysis.ts).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS review_analysis (
+  review_id     TEXT PRIMARY KEY,
+  hash          TEXT NOT NULL,          -- hash del texto analizado
+  estado        TEXT NOT NULL,          -- ok | error | sin_texto
+  idioma        TEXT,
+  publica_es    TEXT,
+  privada_es    TEXT,
+  positivo_es   TEXT,
+  negativo_es   TEXT,
+  resumen       TEXT,
+  sentimiento   TEXT,
+  temas         JSONB NOT NULL DEFAULT '[]'::jsonb,
+  modelo        TEXT,
+  error         TEXT,
+  intentos      INTEGER NOT NULL DEFAULT 0,
+  analizado_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE INDEX IF NOT EXISTS idx_reviews_listing ON reviews (listing_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_reservation ON reviews (reservation_id);
 

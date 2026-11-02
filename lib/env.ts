@@ -54,6 +54,12 @@ export const env = {
     return required("CRON_SECRET");
   },
 
+  // Claude API (traduccion y analisis de reviews). Opcional: sin ella las
+  // reviews se muestran en su idioma original.
+  get anthropicApiKey() {
+    return optional("ANTHROPIC_API_KEY");
+  },
+
   // Google Sheet CSVs
   get costesCsvUrl() {
     return optional("COSTES_CSV_URL");

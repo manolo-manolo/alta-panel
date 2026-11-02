@@ -9,11 +9,13 @@ import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
 import Insights from "@/components/Insights";
 import { forwardKpis } from "@/lib/forward";
 import { generarInsightsForward } from "@/lib/forward-insights";
-import { mesActualMadrid, sumarMeses } from "@/lib/time";
+import { hoyMadrid, mesActualMadrid, sumarDias, sumarMeses } from "@/lib/time";
 import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
 import ReviewsCard from "@/components/ReviewsCard";
+import { reviewsCompletas } from "@/lib/review-analysis";
+import { insightsReviews } from "@/lib/review-insights";
 import OpexDetalle from "@/components/OpexDetalle";
 import { semaforoRentabilidad } from "@/lib/status";
 import { eur, num, pct, mesLabel, pctDirecto, delta } from "@/lib/format";
@@ -36,7 +38,6 @@ import {
   costesLimpieza,
   costesPorCategoria,
   resumenReviews,
-  reviewsNo5,
   ttm,
   mesPorDefecto,
   mesPrevio,
@@ -131,7 +132,9 @@ export default async function UnidadPage({
   const serieChart = serie.map((s) => ({ mes: s.mes, ingresos: s.brutos, noi: s.noi }));
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, fwd, stats, reservas, costes, revResumen, revNo5, cleanCost, opexCats] =
+  // Reviews: las del periodo (bajo 5 estrellas) y las de 12 meses (temas).
+  const hace365 = sumarDias(hoyMadrid(), -365);
+  const [mix, fwd, stats, reservas, costes, revResumen, revs, cleanCost, opexCats] =
     await Promise.all([
       mixCanales(periodMeses, u.listingId),
       forwardKpis([u.listingId]),
@@ -139,7 +142,7 @@ export default async function UnidadPage({
       reservasDelMes(u.listingId, mes),
       costesDetalle(u.nickname, mes),
       resumenReviews(u.listingId, desde, hastaExcl),
-      reviewsNo5(u.listingId, desde, hastaExcl),
+      reviewsCompletas(desde < hace365 ? desde : hace365, u.listingId),
       costesLimpieza(periodMeses, u.nickname),
       costesPorCategoria(periodMeses, u.nickname),
     ]);
@@ -260,7 +263,24 @@ export default async function UnidadPage({
 
       <Card>
         <CardHeader titulo="Reviews" descripcion={etiqueta} />
-        <ReviewsCard resumen={revResumen} no5={revNo5} />
+        <ReviewsCard
+          resumen={revResumen}
+          no5={revs.filter(
+            (r) =>
+              r.rating !== null &&
+              r.rating < 4.995 &&
+              !!r.fecha &&
+              r.fecha.slice(0, 10) >= desde &&
+              r.fecha.slice(0, 10) < hastaExcl,
+          )}
+          temas={insightsReviews(
+            revs.filter((r) => !!r.fecha && r.fecha.slice(0, 10) >= hace365),
+            new Map(unidades.map((x) => [x.listingId, x.displayName])),
+            hoyMadrid(),
+          )}
+          hrefTodas={`/reviews?unidad=${u.listingId}`}
+          mostrarUnidad={false}
+        />
       </Card>
 
       <Card>
