@@ -10,6 +10,8 @@ import { accionesUnidad, type AccionUnidad } from "@/lib/unit-actions";
 import { forwardKpis, type ForwardData, type VentanaForward } from "@/lib/forward";
 import { inteligenciaRevenue, mesesPaceDesdeHoy, type IntelUnidad } from "@/lib/revenue-intel";
 import { costesUnidadCategoriaMes } from "@/lib/costs";
+import { reviewsCompletas } from "@/lib/review-analysis";
+import { insightsReviews, textoArreglo, type Arreglo } from "@/lib/review-insights";
 import {
   seriePnLCash,
   prestamoDeUnidad,
@@ -81,6 +83,7 @@ export interface ContextoAcciones {
   seriePortfolioPeriodo: PnLMes[];
   seriePortfolioTTM: PnLMes[];
   pesos: Map<string, number> | null; // estacionalidad para anualizar unidades nuevas
+  quejasReviews: Map<string, Arreglo[]>; // por listingId, ultimos 12 meses
 }
 
 export interface DatosUnidad {
@@ -137,7 +140,21 @@ export async function cargarContexto(mes: string, periodo: Periodo): Promise<Con
     ratingsPorUnidad(sumarDias(hoyMadrid(), -90)),
     costesUnidadCategoriaMes(mesesTTM),
   ]);
-  const intel = await inteligenciaRevenue(unidades, map, mesesPace);
+  const [intel, reviews12m] = await Promise.all([
+    inteligenciaRevenue(unidades, map, mesesPace),
+    reviewsCompletas(sumarDias(hoyMadrid(), -365)).catch(() => []),
+  ]);
+  const quejasReviews = new Map<string, Arreglo[]>();
+  const ins = insightsReviews(
+    reviews12m,
+    new Map(unidades.map((u) => [u.listingId, u.displayName])),
+    hoyMadrid(),
+  );
+  for (const a of ins.arreglos) {
+    const arr = quejasReviews.get(a.listingId) ?? [];
+    arr.push(a);
+    quejasReviews.set(a.listingId, arr);
+  }
 
   const limpiezaCosteTTM = new Map<string, number>();
   for (const c of celdas) {
@@ -159,6 +176,7 @@ export async function cargarContexto(mes: string, periodo: Periodo): Promise<Con
     seriePortfolioPeriodo: seriePnL(map, unidades, periodMeses),
     seriePortfolioTTM: seriePnL(map, unidades, mesesTTM),
     pesos: pesosEstacionales(map, unidades, mesesTTM),
+    quejasReviews,
   };
 }
 
@@ -278,8 +296,28 @@ export function datosUnidad(ctx: ContextoAcciones, u: UnidadInfo): DatosUnidad {
   };
 }
 
+/**
+ * Quejas de huespedes que merecen accion: repetidas en 12 meses o alguna en
+ * los ultimos 90 dias. Como mucho dos por unidad (las mas repetidas).
+ */
+function accionesReviews(ctx: ContextoAcciones, u: UnidadInfo): AccionUnidad[] {
+  return (ctx.quejasReviews.get(u.listingId) ?? [])
+    .filter((a) => a.n >= 2 || a.recientes >= 1)
+    .slice(0, 2)
+    .map((a) => ({
+      tono: a.n >= 2 && a.recientes >= 1 ? ("alerta" as const) : ("info" as const),
+      palanca: "reviews",
+      impacto: null,
+      texto: textoArreglo(a, "en 12 meses"),
+    }));
+}
+
 /** Acciones de maximo beneficio de una unidad. */
 export function accionesDeUnidad(ctx: ContextoAcciones, u: UnidadInfo, d: DatosUnidad): AccionUnidad[] {
+  return [...accionesBase(ctx, u, d), ...accionesReviews(ctx, u)];
+}
+
+function accionesBase(ctx: ContextoAcciones, u: UnidadInfo, d: DatosUnidad): AccionUnidad[] {
   const { rTTM } = d;
   return accionesUnidad({
     nombre: u.displayName,

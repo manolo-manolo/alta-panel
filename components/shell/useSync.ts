@@ -19,6 +19,13 @@ export function useSync() {
       if (res.ok) {
         setAviso("Datos actualizados");
         router.refresh();
+        // Reviews nuevas: traduccion y analisis en segundo plano.
+        fetch("/api/reviews/analizar", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d && d.analizadas > 0) router.refresh();
+          })
+          .catch(() => {});
       } else if (res.status === 429) {
         setAviso(data.error || "Espera unos minutos");
       } else {

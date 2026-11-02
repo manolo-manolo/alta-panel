@@ -10,8 +10,11 @@ import { generarInsightsForward } from "@/lib/forward-insights";
 import ForwardOutlook from "@/components/ForwardOutlook";
 import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
 import { forwardKpis } from "@/lib/forward";
-import { mesActualMadrid, sumarMeses } from "@/lib/time";
+import { hoyMadrid, mesActualMadrid, sumarDias, sumarMeses } from "@/lib/time";
 import ReviewsCard from "@/components/ReviewsCard";
+import { reviewsCompletas } from "@/lib/review-analysis";
+import { insightsReviews } from "@/lib/review-insights";
+import { TEMA_QUEJA } from "@/lib/review-temas";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
 import { eur, num, pct, delta } from "@/lib/format";
@@ -27,7 +30,6 @@ import {
   estadoDatos,
   statsReservas,
   resumenReviews,
-  reviewsNo5,
   costesLimpieza,
   noiTTM,
   pesosEstacionales,
@@ -184,13 +186,15 @@ export default async function PortfolioPage({
   const pesos = pesosEstacionales(map, unidades, mesesTTM);
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
-  const [mix, fwd, stats, revResumen, revNo5, cleanCostPortfolio] =
+  // Reviews: las del periodo (bajo 5 estrellas) y las de 12 meses (temas).
+  const hace365 = sumarDias(hoyMadrid(), -365);
+  const [mix, fwd, stats, revResumen, revs, cleanCostPortfolio] =
     await Promise.all([
       mixCanales(periodMeses),
       forwardKpis(unidades.map((u) => u.listingId)),
       statsReservas(periodMeses),
       resumenReviews(undefined, desde, hastaExcl),
-      reviewsNo5(undefined, desde, hastaExcl),
+      reviewsCompletas(desde < hace365 ? desde : hace365),
       costesLimpieza(periodMeses),
     ]);
 
@@ -273,7 +277,13 @@ export default async function PortfolioPage({
   const limpiezaNetoPortfolio = rAct.limpieza - cleanCostPortfolio - comisionLimpPortfolio;
   const totalRevMix = mix.reduce((s, d) => s + d.revenue, 0);
   const airbnbRev = mix.find((d) => d.canal === "airbnb")?.revenue ?? 0;
-  const insights = generarInsights({
+  // Reviews de 12 meses: temas para la tarjeta y la queja mas repetida.
+  const temasReviews = insightsReviews(
+    revs.filter((r) => !!r.fecha && r.fecha.slice(0, 10) >= hace365),
+    new Map(unidades.map((x) => [x.listingId, x.displayName])),
+    hoyMadrid(),
+  );
+  const insightsBase = generarInsights({
     occPortfolio: occ,
     filas: filas.map((f) => ({
       nombre: f.nickname, ocupacion: f.ocupacion, tipo: f.tipo,
@@ -286,6 +296,20 @@ export default async function PortfolioPage({
     mixAirbnbPct: totalRevMix > 0 ? airbnbRev / totalRevMix : null,
     ratingMedio: revResumen.ratingMedio,
   });
+  const quejaTop = temasReviews.quejas[0];
+  const insights =
+    quejaTop && quejaTop.negativas >= 2
+      ? [
+          ...insightsBase,
+          {
+            tono: "alerta" as const,
+            texto: `La queja más repetida en las reviews de 12 meses es ${TEMA_QUEJA[quejaTop.tema]}: ${quejaTop.negativas} reseñas (${quejaTop.unidadesNeg
+              .slice(0, 3)
+              .map((u) => `${u.nombre} ${u.n}`)
+              .join(", ")})${quejaTop.citasNeg[0] ? `, como «${quejaTop.citasNeg[0].texto}»` : ""}. Qué arreglar, en Reviews.`,
+          },
+        ]
+      : insightsBase;
 
   // Vision futura: consejos de revenue del portfolio.
   const insightsFwd = generarInsightsForward(
@@ -405,7 +429,19 @@ export default async function PortfolioPage({
 
       <Card>
         <CardHeader titulo="Reviews" descripcion={etiqueta} />
-        <ReviewsCard resumen={revResumen} no5={revNo5} />
+        <ReviewsCard
+          resumen={revResumen}
+          no5={revs.filter(
+            (r) =>
+              r.rating !== null &&
+              r.rating < 4.995 &&
+              !!r.fecha &&
+              r.fecha.slice(0, 10) >= desde &&
+              r.fecha.slice(0, 10) < hastaExcl,
+          )}
+          temas={temasReviews}
+          hrefTodas="/reviews"
+        />
       </Card>
     </AppShell>
   );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { runSync } from "@/lib/sync";
+import { analizarPendientes } from "@/lib/review-analysis";
 import { env } from "@/lib/env";
 import { verificarSesionToken } from "@/lib/auth";
 import { COOKIE_SESION, REFRESH_RATE_LIMIT_MIN } from "@/lib/config";
@@ -29,8 +30,19 @@ export async function GET(request: Request) {
   if (!esCron(request)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
+  const inicio = Date.now();
   const result = await runSync({ kind: "cron" });
-  return NextResponse.json(result);
+  // Con el tiempo que sobre de los 60 s, traducir y analizar reviews nuevas.
+  let reviews = null;
+  const restante = 50_000 - (Date.now() - inicio);
+  if (restante > 20_000) {
+    try {
+      reviews = await analizarPendientes({ presupuestoMs: restante });
+    } catch {
+      reviews = null;
+    }
+  }
+  return NextResponse.json({ ...result, reviews });
 }
 
 // Refresco manual desde la UI (requiere sesion). Rate limit de 10 minutos.

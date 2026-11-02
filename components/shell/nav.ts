@@ -5,6 +5,7 @@ import {
   Landmark,
   LayoutDashboard,
   Megaphone,
+  MessageSquareText,
   Settings,
   Upload,
   Wallet,
@@ -43,6 +44,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
     titulo: "Crecimiento",
     items: [
       { href: "/anuncios", label: "Anuncios", icon: Megaphone },
+      { href: "/reviews", label: "Reviews", icon: MessageSquareText },
       { href: "/web", label: "Web", icon: Globe },
       { href: "/estacionalidad", label: "Estacionalidad", icon: CalendarRange },
     ],
