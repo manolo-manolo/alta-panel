@@ -33,15 +33,15 @@ export default function NoiRevenueChart({ data }: { data: Punto[] }) {
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#eef1f4" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#edf0ee" vertical={false} />
           <XAxis
             dataKey="mes"
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            tick={{ fontSize: 11, fill: "#667472" }}
             tickLine={false}
-            axisLine={{ stroke: "#e4e7ec" }}
+            axisLine={{ stroke: "#e4e8e6" }}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "#94a3b8" }}
+            tick={{ fontSize: 11, fill: "#667472" }}
             tickLine={false}
             axisLine={false}
             width={48}
@@ -51,11 +51,11 @@ export default function NoiRevenueChart({ data }: { data: Punto[] }) {
             formatter={(value) => eur(Number(value))}
             contentStyle={{
               borderRadius: 8,
-              border: "1px solid #e4e7ec",
+              border: "1px solid #e4e8e6",
               fontSize: 12,
             }}
           />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
+          <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: "#4d5b59" }}>{v}</span>} />
           <Bar dataKey="Ingresos" fill={COLOR_REV} radius={[3, 3, 0, 0]} />
           <Line
             dataKey="NOI"

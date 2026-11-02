@@ -35,7 +35,7 @@ export function generarInsights(i: InsightInput): Insight[] {
   if (i.limpiezaNeto < 0) {
     alertas.push({
       tono: "alerta",
-      texto: `La limpieza deja ${eur0(i.limpiezaNeto)} (margen ${i.limpiezaMargen !== null ? pct1(i.limpiezaMargen) : "n/d"}). Sube la tarifa de limpieza o negocia la comision del canal sobre ella.`,
+      texto: `La limpieza deja ${eur0(i.limpiezaNeto)} (margen ${i.limpiezaMargen !== null ? pct1(i.limpiezaMargen) : "n/d"}). Sube la tarifa de limpieza o negocia la comisión del canal sobre ella.`,
     });
   }
 
@@ -45,7 +45,7 @@ export function generarInsights(i: InsightInput): Insight[] {
     if (bajas.length) {
       alertas.push({
         tono: "alerta",
-        texto: `${bajas.length} unidad(es) muy por debajo de la ocupacion media (${pct1(i.occPortfolio)}): ${bajas.map((b) => b.nombre).join(", ")}. Revisa precio o visibilidad.`,
+        texto: `${bajas.length} unidad(es) muy por debajo de la ocupación media (${pct1(i.occPortfolio)}): ${bajas.map((b) => b.nombre).join(", ")}. Revisa precio o visibilidad.`,
       });
     }
   }
@@ -73,8 +73,8 @@ export function generarInsights(i: InsightInput): Insight[] {
 
   // Reviews
   if (i.ratingMedio !== null) {
-    if (i.ratingMedio < 4.7) alertas.push({ tono: "alerta", texto: `Rating medio ${i.ratingMedio.toFixed(2)} por debajo de 4,7. Revisa las reviews recientes por debajo de 5 estrellas.` });
-    else if (i.ratingMedio >= 4.85) buenas.push({ tono: "bueno", texto: `Rating medio excelente (${i.ratingMedio.toFixed(2)}).` });
+    if (i.ratingMedio < 4.7) alertas.push({ tono: "alerta", texto: `Rating medio ${i.ratingMedio.toFixed(2).replace(".", ",")} por debajo de 4,7. Revisa las reviews recientes por debajo de 5 estrellas.` });
+    else if (i.ratingMedio >= 4.85) buenas.push({ tono: "bueno", texto: `Rating medio excelente (${i.ratingMedio.toFixed(2).replace(".", ",")}).` });
   }
 
   // Costes pendientes

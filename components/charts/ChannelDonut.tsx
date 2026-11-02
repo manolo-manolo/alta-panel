@@ -14,7 +14,7 @@ const COLORES: Record<Canal, string> = {
   airbnb: "#e07a5f",
   booking: "#3d5a80",
   directo: "#0d7c74",
-  otros: "#94a3b8",
+  otros: "#9aa5a3",
 };
 
 export default function ChannelDonut({ data }: { data: Mix[] }) {

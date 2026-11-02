@@ -79,7 +79,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
     for (const u of fuera) {
       const driver =
         u.fijos > u.variables
-          ? "los costes fijos (alquiler/comunidad/seguros) pesan mas que los variables: el problema es de estructura o de ingresos bajos"
+          ? "los costes fijos (alquiler/comunidad/seguros) pesan más que los variables: el problema es de estructura o de ingresos bajos"
           : "el gasto variable (limpieza, suministros, mantenimiento) es el que se lleva el margen";
       alertas.push({
         tono: "alerta",
@@ -99,7 +99,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
       .join(", ");
     alertas.push({
       tono: "alerta",
-      texto: `La limpieza pierde dinero en: ${detalle}. Sube la tarifa de limpieza al huesped o renegocia el coste por servicio.`,
+      texto: `La limpieza pierde dinero en: ${detalle}. Sube la tarifa de limpieza al huésped o renegocia el coste por servicio.`,
     });
   }
 
@@ -114,7 +114,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
     for (const u of caros) {
       alertas.push({
         tono: "alerta",
-        texto: `${u.nombre} gasta ${eur0(u.suministros / u.vendidas)} de suministros por noche vendida (mediana del portfolio ${eur0(mediana)}). Revisa tarifas de luz, termostatos y consumos en vacio.`,
+        texto: `${u.nombre} gasta ${eur0(u.suministros / u.vendidas)} de suministros por noche vendida (mediana del portfolio ${eur0(mediana)}). Revisa tarifas de luz, termostatos y consumos en vacío.`,
       });
     }
   }
@@ -150,7 +150,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
     if (v >= 0.1 && i.totalFijos - i.fijosPrior > 200) {
       alertas.push({
         tono: "alerta",
-        texto: `Los costes fijos suben un ${pct0(v)} vs el mismo periodo del ano pasado (${eur0(i.totalFijos)} vs ${eur0(i.fijosPrior)}). Son los mas dificiles de revertir: revisa renovaciones de alquiler, seguros y cuotas.`,
+        texto: `Los costes fijos suben un ${pct0(v)} vs el mismo periodo del año pasado (${eur0(i.totalFijos)} vs ${eur0(i.fijosPrior)}). Son los más difíciles de revertir: revisa renovaciones de alquiler, seguros y cuotas.`,
       });
     }
   }
@@ -166,12 +166,12 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
     if (ratioPortfolio <= ratioPrior - 0.03) {
       buenas.push({
         tono: "bueno",
-        texto: `El opex baja del ${pct0(ratioPrior)} al ${pct0(ratioPortfolio)} de los ingresos netos vs el ano pasado: la estructura de costes esta mejorando.`,
+        texto: `El opex baja del ${pct0(ratioPrior)} al ${pct0(ratioPortfolio)} de los ingresos netos vs el año pasado: la estructura de costes esta mejorando.`,
       });
     } else if (ratioPortfolio >= ratioPrior + 0.05) {
       alertas.push({
         tono: "alerta",
-        texto: `El opex sube del ${pct0(ratioPrior)} al ${pct0(ratioPortfolio)} de los ingresos netos vs el ano pasado: los costes crecen mas rapido que los ingresos.`,
+        texto: `El opex sube del ${pct0(ratioPrior)} al ${pct0(ratioPortfolio)} de los ingresos netos vs el año pasado: los costes crecen más rápido que los ingresos.`,
       });
     }
   }
@@ -184,7 +184,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
   if (subidas.length) {
     info.push({
       tono: "info",
-      texto: `Mayores subidas vs el ano pasado: ${subidas
+      texto: `Mayores subidas vs el año pasado: ${subidas
         .map((m) => `${m.etiqueta} (+${eur0(m.actual - m.anterior)})`)
         .join(", ")}.`,
     });
@@ -201,7 +201,7 @@ export function generarInsightsCostes(i: CostInsightInput): Insight[] {
   if (i.pctEstimado >= 0.3) {
     info.push({
       tono: "info",
-      texto: `El ${pct0(i.pctEstimado)} del opex del periodo son estimaciones (run-rate), no facturas reales. Las cifras se consolidaran al cargar el proximo Excel de gastos.`,
+      texto: `El ${pct0(i.pctEstimado)} del opex del periodo son estimaciones (run-rate), no facturas reales. Las cifras se consolidaran al cargar el próximo Excel de gastos.`,
     });
   }
 

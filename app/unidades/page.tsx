@@ -1,9 +1,10 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
+import AppShell from "@/components/shell/AppShell";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, SectionTitle } from "@/components/ui";
+import { Card, CardHeader } from "@/components/ui";
+import InsightItem from "@/components/InsightItem";
 import UnitsCommandTable, { type FilaMando } from "@/components/UnitsCommandTable";
+import ForwardMatrix, { type FilaForward } from "@/components/ForwardMatrix";
 import { seriePnLCash, breakEvenOcc } from "@/lib/finance";
 import {
   cargarContexto,
@@ -13,7 +14,7 @@ import {
   itemsUnidad,
 } from "@/lib/acciones";
 import type { AccionUnidad } from "@/lib/unit-actions";
-import { mesLabel, eur } from "@/lib/format";
+import { eur } from "@/lib/format";
 import {
   sumar,
   ocupacionDe,
@@ -28,19 +29,6 @@ import {
 
 export const dynamic = "force-dynamic";
 const PERIODOS = ["mes", "ytd", "ttm", "ano"];
-
-// Mismos estilos que el componente Insights, en columna unica y con euros.
-const ESTILO: Record<AccionUnidad["tono"], string> = {
-  alerta: "border-l-bad bg-bad-soft/40",
-  bueno: "border-l-ok bg-ok-soft/40",
-  info: "border-l-brand bg-surface-2",
-};
-const ICONO: Record<AccionUnidad["tono"], string> = { alerta: "▲", bueno: "●", info: "◆" };
-const ICONO_COLOR: Record<AccionUnidad["tono"], string> = {
-  alerta: "text-bad",
-  bueno: "text-ok",
-  info: "text-brand",
-};
 
 export default async function UnidadesPage({
   searchParams,
@@ -63,10 +51,9 @@ export default async function UnidadesPage({
   const { unidades, map, mesesTTM, periodMeses } = ctx;
   if (unidades.length === 0) {
     return (
-      <Shell mes={mes} periodo={periodo} unidades={[]} ultima={estado.ultimoExito}>
-        <Banner estado={estado} />
-        <SetupNotice titulo="Todavia no hay unidades sincronizadas" />
-      </Shell>
+      <AppShell titulo="Unidades" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Todavía no hay unidades sincronizadas" />
+      </AppShell>
     );
   }
 
@@ -179,103 +166,97 @@ export default async function UnidadesPage({
   const etiqueta = etiquetaPeriodo(mes, periodo);
   const potencialTotal = accionesPorUnidad.reduce((s, a) => s + a.potencial, 0);
 
+  // Ocupacion y ADR futuros por unidad (on the books).
+  const ventanasFila = (ventanas: typeof ctx.fwd.portfolio) =>
+    ventanas.map((v) => ({
+      dias: v.dias,
+      occ: v.occ,
+      adr: v.adr,
+      occSTLY: v.occSTLY,
+      adrSTLY: v.adrSTLY,
+      noches: v.noches,
+      disponibles: v.disponibles,
+      revenue: v.revenue,
+    }));
+  const filasFwd: FilaForward[] = unidades.map((u) => ({
+    listingId: u.listingId,
+    nombre: u.displayName,
+    ventanas: ventanasFila(ctx.fwd.porUnidad.get(u.listingId) ?? []),
+  }));
+  const totalFwd: FilaForward = {
+    listingId: "__total__",
+    nombre: "Portfolio",
+    ventanas: ventanasFila(ctx.fwd.portfolio),
+  };
+
   return (
-    <Shell mes={mes} periodo={periodo} unidades={unidades} ultima={estado.ultimoExito}>
-      <Banner estado={estado} />
-
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold text-ink">
-          Unidades{" "}
-          <span className="text-muted">· {etiqueta} ({mesLabel(mes)})</span>
-        </h1>
-      </div>
-
+    <AppShell
+      titulo="Unidades"
+      subtitulo={`${etiqueta} · ${unidades.length} unidades`}
+      contexto={{ mes, periodo }}
+      estado={estado}
+    >
       <Card>
-        <SectionTitle>Cuadro de mando por unidad</SectionTitle>
+        <CardHeader
+          titulo="Cuadro de mando"
+          descripcion="Operación, resultado, rendimiento, reviews y cartera de cada unidad"
+        />
         <UnitsCommandTable filas={filas} total={total} mes={mes} />
       </Card>
 
       <Card>
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-faint">
-            Acciones por unidad
-          </h2>
-          {potencialTotal > 0 && (
-            <span className="text-sm text-muted">
-              Potencial identificado ≈{" "}
-              <span className="font-semibold text-ink">{eur(potencialTotal)}</span>
-            </span>
-          )}
-        </div>
+        <CardHeader
+          titulo="Acciones por unidad"
+          descripcion="Ordenadas por euros estimados"
+          accion={
+            potencialTotal > 0 ? (
+              <span className="rounded-lg bg-brand-soft px-2.5 py-1 text-sm text-brand-ink">
+                Potencial ≈ <span className="tabular font-semibold">{eur(potencialTotal)}</span>
+              </span>
+            ) : undefined
+          }
+        />
         {accionesPorUnidad.length === 0 ? (
-          <p className="text-sm text-faint">Sin acciones pendientes: todo en banda.</p>
+          <p className="text-sm text-muted">Sin acciones pendientes: todo en banda.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-6 lg:grid-cols-2">
             {accionesPorUnidad.map((a) => (
               <div key={a.listingId}>
-                <div className="mb-1.5 flex items-baseline justify-between">
+                <div className="mb-2 flex items-baseline justify-between gap-2">
                   <a
                     href={`/unidad/${a.listingId}?mes=${mes}&periodo=${periodo}`}
-                    className="text-sm font-semibold text-ink hover:text-brand"
+                    className="text-sm font-semibold text-ink transition hover:text-brand"
                   >
                     {a.nombre}
                   </a>
                   {a.potencial > 0 && (
-                    <span className="text-xs text-muted">≈ {eur(a.potencial)}</span>
+                    <span className="tabular text-xs font-medium text-muted">≈ {eur(a.potencial)}</span>
                   )}
                 </div>
                 <div className="flex flex-col gap-2">
                   {a.acciones.map((it, i) => (
-                    <div
-                      key={i}
-                      className={`flex gap-2 rounded-md border border-line border-l-4 px-3 py-2 text-sm ${ESTILO[it.tono]}`}
-                    >
-                      <span className={`${ICONO_COLOR[it.tono]} shrink-0`}>{ICONO[it.tono]}</span>
-                      <span className="min-w-0 flex-1 text-ink">{it.texto}</span>
-                      {it.impacto !== null && it.impacto >= 50 && (
-                        <span className="tabular shrink-0 self-start text-xs font-semibold text-ink">
-                          {eur(it.impacto)}
-                        </span>
-                      )}
-                    </div>
+                    <InsightItem key={i} tono={it.tono} texto={it.texto} impacto={it.impacto} />
                   ))}
                 </div>
               </div>
             ))}
           </div>
         )}
-        <p className="mt-3 text-xs text-faint">
+        <p className="mt-4 text-xs text-faint">
           Euros estimados con supuestos conservadores (subida del 10% sobre noches por vender,
           relleno parcial de huecos y noches libres, margen por noche real de cada unidad). Son
-          ordenes de magnitud para priorizar, no previsiones.
+          órdenes de magnitud para priorizar, no previsiones.
         </p>
       </Card>
-    </Shell>
-  );
-}
 
-function Shell({
-  mes,
-  periodo,
-  unidades,
-  ultima,
-  children,
-}: {
-  mes: string;
-  periodo: string;
-  unidades: { listingId: string; displayName: string }[];
-  ultima: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo={periodo}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={ultima}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">{children}</main>
-    </div>
+      <Card>
+        <div id="futuro" className="scroll-mt-20" />
+        <CardHeader
+          titulo="Ocupación y ADR futuros"
+          descripcion="Lo ya reservado para los próximos 15, 30, 60 y 90 días en cada unidad"
+        />
+        <ForwardMatrix filas={filasFwd} total={totalFwd} mes={mes} />
+      </Card>
+    </AppShell>
   );
 }

@@ -211,7 +211,7 @@ export function parseOpexV2(
   const rows: string[][] = usaTab
     ? text.split(/\r?\n/).filter((l) => l.trim() !== "").map((l) => l.split("\t"))
     : parseCsv(text);
-  if (rows.length < 2) throw new Error("Archivo vacio o sin filas de datos");
+  if (rows.length < 2) throw new Error("Archivo vacío o sin filas de datos");
 
   const header = rows[0];
   const monthCols: { col: number; mes: string }[] = [];
@@ -401,7 +401,7 @@ async function ibarra2(client: PoolClient): Promise<number> {
       // Contractual y deterministico sobre ingresos reales: no es estimacion.
       nuevas.push({
         mes, unidad: "Ibarra 2", categoria: "alquiler",
-        concepto: "Pago propietario (75% de alojamiento neto de comision)",
+        concepto: "Pago propietario (75% de alojamiento neto de comisión)",
         importe: payout, estimado: false, origen: "ibarra2",
       });
       filas++;

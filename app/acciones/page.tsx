@@ -1,9 +1,10 @@
+import { CircleAlert, Info, PiggyBank, TrendingUp, Zap } from "lucide-react";
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
-import { Card, SectionTitle } from "@/components/ui";
+import AppShell from "@/components/shell/AppShell";
+import { Card, CardHeader, EmptyState } from "@/components/ui";
+import InsightItem from "@/components/InsightItem";
 import { generarAcciones, type Accion } from "@/lib/acciones";
-import { getUnidades, estadoDatos, mesPorDefecto } from "@/lib/metrics";
+import { estadoDatos } from "@/lib/metrics";
 import { mesLabel, num, eur } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -11,53 +12,61 @@ export const dynamic = "force-dynamic";
 // Una sola bandeja priorizada con todo lo accionable del negocio: revenue,
 // unidades y caja. Lo primero que se abre por la manana.
 
-const ESTILO: Record<Accion["tono"], string> = {
-  alerta: "border-l-bad bg-bad-soft/40",
-  bueno: "border-l-ok bg-ok-soft/40",
-  info: "border-l-brand bg-surface-2",
-};
-const ICONO: Record<Accion["tono"], string> = { alerta: "▲", bueno: "●", info: "◆" };
-const ICONO_COLOR: Record<Accion["tono"], string> = {
-  alerta: "text-bad",
-  bueno: "text-ok",
-  info: "text-brand",
-};
-
-function Bloque({ titulo, items }: { titulo: string; items: Accion[] }) {
+function Bloque({
+  titulo,
+  descripcion,
+  items,
+}: {
+  titulo: string;
+  descripcion: string;
+  items: Accion[];
+}) {
   if (items.length === 0) return null;
   return (
     <Card>
-      <SectionTitle>{titulo}</SectionTitle>
+      <CardHeader titulo={titulo} descripcion={descripcion} />
       <div className="flex flex-col gap-2">
         {items.map((a, i) => (
-          <a
+          <InsightItem
             key={i}
+            tono={a.tono}
+            texto={a.texto}
+            etiqueta={a.etiqueta}
+            impacto={a.impacto}
             href={a.href}
-            className={`flex gap-2 rounded-md border border-line border-l-4 px-3 py-2 text-sm transition hover:border-brand ${ESTILO[a.tono]}`}
-          >
-            <span className={`${ICONO_COLOR[a.tono]} shrink-0`}>{ICONO[a.tono]}</span>
-            <span className="min-w-0 flex-1 text-ink">
-              <span className="mr-1.5 rounded bg-canvas px-1.5 py-0.5 text-xs font-medium text-muted">
-                {a.etiqueta}
-              </span>
-              {a.texto}
-            </span>
-            {a.impacto !== null && a.impacto >= 50 && (
-              <span className="tabular shrink-0 self-start text-xs font-semibold text-ink">
-                {eur(a.impacto)}
-              </span>
-            )}
-            <span className="shrink-0 self-center text-faint">›</span>
-          </a>
+          />
         ))}
       </div>
     </Card>
   );
 }
 
+function Contador({
+  icono,
+  label,
+  valor,
+  estilo,
+}: {
+  icono: React.ReactNode;
+  label: string;
+  valor: string;
+  estilo: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${estilo}`}>
+        {icono}
+      </span>
+      <div className="min-w-0">
+        <div className="tabular text-xl font-semibold tracking-tight text-ink">{valor}</div>
+        <div className="text-xs font-medium text-muted">{label}</div>
+      </div>
+    </div>
+  );
+}
+
 export default async function AccionesPage() {
   await requireSesion();
-  const mes = mesPorDefecto();
 
   let estado;
   try {
@@ -66,68 +75,78 @@ export default async function AccionesPage() {
     estado = { ultimoExito: null, ultimoLog: null };
   }
 
-  let unidades: { listingId: string; displayName: string }[] = [];
-  try {
-    unidades = await getUnidades();
-  } catch {
-    unidades = [];
-  }
-
   const centro = await generarAcciones();
   const alertas = centro.acciones.filter((a) => a.tono === "alerta");
   const oportunidades = centro.acciones.filter((a) => a.tono === "bueno");
   const avisos = centro.acciones.filter((a) => a.tono === "info");
 
   return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo="mes"
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={estado.ultimoExito}
+    <AppShell
+      titulo="Acciones"
+      subtitulo={`Qué tocar hoy para ganar más · ${mesLabel(centro.mes)}`}
+      estado={estado}
+      mes={centro.mes}
+    >
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Contador
+          icono={<CircleAlert size={18} aria-hidden />}
+          label="Por hacer"
+          valor={num(centro.alertas)}
+          estilo="bg-bad-soft text-bad"
+        />
+        <Contador
+          icono={<TrendingUp size={18} aria-hidden />}
+          label="Oportunidades"
+          valor={num(centro.oportunidades)}
+          estilo="bg-ok-soft text-ok"
+        />
+        <Contador
+          icono={<Info size={18} aria-hidden />}
+          label="Avisos"
+          valor={num(centro.avisos)}
+          estilo="bg-brand-soft text-brand"
+        />
+        <Contador
+          icono={<PiggyBank size={18} aria-hidden />}
+          label="Potencial estimado"
+          valor={centro.potencial > 0 ? eur(centro.potencial) : "-"}
+          estilo="bg-surface-3 text-ink"
+        />
+      </div>
+
+      {centro.acciones.length === 0 && (
+        <Card>
+          <EmptyState icono={<Zap size={18} aria-hidden />} titulo="Nada pendiente">
+            Revenue, unidades y caja están en banda.
+          </EmptyState>
+        </Card>
+      )}
+
+      <Bloque
+        titulo="Hacer ya"
+        descripcion="Alertas ordenadas por euros en juego"
+        items={alertas}
       />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        <Banner estado={estado} />
+      <Bloque
+        titulo="Oportunidades"
+        descripcion="Dinero que se puede capturar subiendo precio, rellenando huecos o ajustando reglas"
+        items={oportunidades}
+      />
+      <Bloque titulo="Avisos" descripcion="A vigilar, sin acción urgente" items={avisos} />
 
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-lg font-semibold text-ink">
-            Acciones <span className="text-muted">· {mesLabel(centro.mes)}</span>
-          </h1>
-          <p className="text-sm text-muted">
-            <span className="font-semibold text-bad">{num(centro.alertas)}</span> por hacer ·{" "}
-            <span className="font-semibold text-ok">{num(centro.oportunidades)}</span>{" "}
-            oportunidades ·{" "}
-            <span className="font-semibold text-brand">{num(centro.avisos)}</span> avisos
-            {centro.potencial > 0 && (
-              <>
-                {" "}· potencial ≈{" "}
-                <span className="font-semibold text-ink">{eur(centro.potencial)}</span>
-              </>
-            )}
-          </p>
-        </div>
-
-        {centro.acciones.length === 0 && (
-          <Card>
-            <p className="text-sm text-faint">
-              Nada pendiente: revenue, unidades y caja en banda.
-            </p>
-          </Card>
-        )}
-
-        <Bloque titulo="Hacer ya" items={alertas} />
-        <Bloque titulo="Oportunidades" items={oportunidades} />
-        <Bloque titulo="Avisos" items={avisos} />
-
-        <p className="text-xs text-faint">
-          Ordenadas por severidad y, dentro de cada bloque, por euros estimados (supuestos
-          conservadores: +10% de precio sobre noches por vender, relleno parcial de huecos y
-          noches libres, margen por noche real de cada unidad). Agrega revenue (vision futura),
-          acciones por unidad y lectura del P&amp;L de caja. Los consejos de costes estan en{" "}
-          <a href="/costes" className="text-brand hover:underline">Costes</a> y los de la web en{" "}
-          <a href="/web" className="text-brand hover:underline">Web</a>.
-        </p>
-      </main>
-    </div>
+      <p className="text-xs text-faint">
+        Ordenadas por severidad y, dentro de cada bloque, por euros estimados (supuestos
+        conservadores: +10% de precio sobre noches por vender, relleno parcial de huecos y noches
+        libres, margen por noche real de cada unidad). Los consejos de costes están en{" "}
+        <a href="/costes" className="text-brand hover:underline">
+          Costes
+        </a>{" "}
+        y los de la web en{" "}
+        <a href="/web" className="text-brand hover:underline">
+          Web
+        </a>
+        .
+      </p>
+    </AppShell>
   );
 }

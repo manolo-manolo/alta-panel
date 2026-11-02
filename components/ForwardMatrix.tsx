@@ -39,7 +39,7 @@ function Ritmo({ occ, occSTLY }: { occ: number | null; occSTLY: number | null })
   return (
     <span
       className={`ml-1 text-[10px] ${arriba ? "text-ok" : "text-bad"}`}
-      title={`Ritmo vs mismo punto del ano pasado: ${pct(occSTLY)} entonces`}
+      title={`Ritmo vs mismo punto del año pasado: ${pct(occSTLY)} entonces`}
     >
       {arriba ? "▲" : "▼"}
     </span>
@@ -85,7 +85,7 @@ export default function ForwardMatrix({
     }
   }
 
-  const flecha = (key: string) => (sortKey === key ? (desc ? " ▼" : " ▲") : "");
+  const flecha = (key: string) => (sortKey === key ? (desc ? " ↓" : " ↑") : "");
 
   const celdas = (f: FilaForward) =>
     VENTANAS.flatMap((dias) => {
@@ -96,7 +96,7 @@ export default function ForwardMatrix({
       return [
         <td
           key={`occ${dias}`}
-          className="whitespace-nowrap px-2 py-2 text-right text-ink"
+          className="whitespace-nowrap px-3 py-2.5 text-right text-ink"
           title={titulo}
         >
           {win ? (
@@ -110,7 +110,7 @@ export default function ForwardMatrix({
         </td>,
         <td
           key={`adr${dias}`}
-          className="whitespace-nowrap border-r border-line/60 px-2 py-2 text-right text-muted last:border-r-0"
+          className="whitespace-nowrap border-r border-line/60 px-3 py-2.5 text-right text-muted last:border-r-0"
         >
           {win ? eur(win.adr) : "-"}
         </td>,
@@ -118,25 +118,25 @@ export default function ForwardMatrix({
     });
 
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[860px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[860px]">
         <thead>
-          <tr className="border-b border-line/60 text-xs text-faint">
-            <th className="px-2 py-1" />
+          <tr>
+            <th className="col-fija px-3 py-2" />
             {VENTANAS.map((d) => (
               <th
                 key={d}
                 colSpan={2}
-                className="border-r border-line/60 px-2 py-1 text-center font-medium last:border-r-0"
+                className="border-r border-line/60 px-3 py-2 text-center font-medium last:border-r-0"
               >
-                {d} dias
+                {d} días
               </th>
             ))}
           </tr>
-          <tr className="border-b border-line text-xs text-faint">
+          <tr>
             <th
               onClick={() => orden("nombre")}
-              className="cursor-pointer px-2 py-2 text-left font-medium hover:text-ink"
+              className="col-fija cursor-pointer px-3 py-2.5 text-left font-medium hover:text-ink"
             >
               Unidad{flecha("nombre")}
             </th>
@@ -144,14 +144,14 @@ export default function ForwardMatrix({
               <th
                 key={`occ${d}`}
                 onClick={() => orden(`occ${d}`)}
-                className="cursor-pointer px-2 py-2 text-right font-medium hover:text-ink"
+                className="cursor-pointer px-3 py-2.5 text-right font-medium hover:text-ink"
               >
                 Occ{flecha(`occ${d}`)}
               </th>,
               <th
                 key={`adr${d}`}
                 onClick={() => orden(`adr${d}`)}
-                className="cursor-pointer border-r border-line/60 px-2 py-2 text-right font-medium last:border-r-0 hover:text-ink"
+                className="cursor-pointer border-r border-line/60 px-3 py-2.5 text-right font-medium last:border-r-0 hover:text-ink"
               >
                 ADR{flecha(`adr${d}`)}
               </th>,
@@ -165,20 +165,20 @@ export default function ForwardMatrix({
               onClick={() => router.push(`/unidad/${f.listingId}?mes=${mes}`)}
               className="cursor-pointer border-b border-line/60 hover:bg-surface-2"
             >
-              <td className="px-2 py-2 text-left font-medium text-ink">{f.nombre}</td>
+              <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left font-medium text-ink">{f.nombre}</td>
               {celdas(f)}
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t-2 border-line font-semibold text-ink">
-            <td className="px-2 py-2 text-left">{total.nombre}</td>
+            <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left">{total.nombre}</td>
             {celdas(total)}
           </tr>
         </tfoot>
       </table>
       <p className="mt-2 text-xs text-faint">
-        On the books a dia de hoy. ▲▼ ritmo vs el mismo punto del ano pasado. Pasa el
+        On the books a día de hoy. ▲▼ ritmo vs el mismo punto del año pasado. Pasa el
         cursor por una celda para ver noches vendidas y revenue.
       </p>
     </div>

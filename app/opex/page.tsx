@@ -1,8 +1,8 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import { Card, SectionTitle } from "@/components/ui";
+import AppShell from "@/components/shell/AppShell";
+import { Card, CardHeader } from "@/components/ui";
 import OpexUpload from "@/components/OpexUpload";
-import { getUnidades, estadoDatos, mesPorDefecto } from "@/lib/metrics";
+import { estadoDatos, mesPorDefecto } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 
@@ -15,34 +15,33 @@ export default async function OpexPage() {
   } catch {
     estado = { ultimoExito: null, ultimoLog: null };
   }
-  let unidades: Awaited<ReturnType<typeof getUnidades>> = [];
-  try {
-    unidades = await getUnidades();
-  } catch {
-    unidades = [];
-  }
 
   return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        unidades={unidades.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={estado.ultimoExito}
-      />
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-4">
-        <Card>
-          <SectionTitle>Subir Opex actualizado</SectionTitle>
-          <p className="mb-4 text-sm text-muted">
-            Sube el archivo de gastos (CSV o texto separado por tabuladores).
-            El panel detecta el formato automaticamente: el Excel historico por
-            bloques o el formato mensual (Unidad, Categoria y un mes por
-            columna). Mapea las categorias, excluye comisiones de canal y capex,
-            y regenera las estimaciones de los meses sin datos. Cada formato
-            reemplaza solo su propia carga anterior.
-          </p>
-          <OpexUpload />
-        </Card>
-      </main>
-    </div>
+    <AppShell
+      titulo="Subir gastos"
+      subtitulo="Actualiza el opex de la cartera con el Excel de gastos"
+      estado={estado}
+      mes={mes}
+      ancho="estrecho"
+    >
+      <Card>
+        <CardHeader
+          titulo="Archivo de gastos"
+          descripcion="CSV o texto separado por tabuladores, exportado desde el Excel"
+        />
+        <ul className="mb-5 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
+          <li>
+            El formato se detecta solo: el Excel histórico por bloques o el formato mensual
+            (Unidad, Categoría y un mes por columna).
+          </li>
+          <li>
+            Se mapean las categorías, se excluyen comisiones de canal y capex, y se regeneran las
+            estimaciones de los meses sin datos.
+          </li>
+          <li>Cada formato reemplaza solo su propia carga anterior.</li>
+        </ul>
+        <OpexUpload />
+      </Card>
+    </AppShell>
   );
 }

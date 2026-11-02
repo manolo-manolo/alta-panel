@@ -805,11 +805,19 @@ export function mesesDePeriodo(mes: string, p: Periodo): string[] {
   return [mes];
 }
 
+const MESES_NOMBRE = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** Etiqueta legible del periodo: "Octubre 2026", "Últimos 12 meses hasta octubre 2026"... */
 export function etiquetaPeriodo(mes: string, p: Periodo): string {
-  if (p === "ytd") return `Acumulado ${mes.slice(0, 4)}`;
-  if (p === "ttm") return "Ultimos 12 meses";
-  if (p === "ano") return `Ano ${mes.slice(0, 4)}`;
-  return "Mes";
+  const ano = mes.slice(0, 4);
+  const nombre = MESES_NOMBRE[Number(mes.slice(5, 7)) - 1] ?? "";
+  if (p === "ytd") return `Acumulado ${ano} hasta ${nombre}`;
+  if (p === "ttm") return `Últimos 12 meses hasta ${nombre} ${ano}`;
+  if (p === "ano") return `Año ${ano}`;
+  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${ano}`;
 }
 
 /** Rango de fechas [desde, hastaExcl) que cubre un conjunto de meses. */

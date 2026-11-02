@@ -13,14 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Alta Panel",
-  description: "Panel de operaciones y P&L de AltaHomes",
+  title: { default: "Alta Panel", template: "%s · Alta Panel" },
+  description: "Panel de operaciones, revenue y P&L de AltaHomes",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0d7c74",
+  viewportFit: "cover",
+  themeColor: "#ffffff",
 };
 
 export default function RootLayout({

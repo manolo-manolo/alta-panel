@@ -1,8 +1,7 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
+import AppShell from "@/components/shell/AppShell";
 import SetupNotice from "@/components/SetupNotice";
-import { Card, KpiCard, SectionTitle, Chip, MiniStat } from "@/components/ui";
+import { Card, CardHeader, KpiCard, Chip, LinkFlecha } from "@/components/ui";
 import NoiRevenueChart from "@/components/charts/NoiRevenueChart";
 import ChannelTable from "@/components/ChannelTable";
 import ForwardOutlook from "@/components/ForwardOutlook";
@@ -76,12 +75,9 @@ export default async function UnidadPage({
 
   if (!u) {
     return (
-      <div className="min-h-screen">
-        <TopBar mes={mes} periodo={periodo} unidades={opts} ultimaActualizacion={estado.ultimoExito} />
-        <main className="mx-auto max-w-7xl px-4 py-8">
-          <SetupNotice titulo="Unidad no encontrada" />
-        </main>
-      </div>
+      <AppShell titulo="Unidad no encontrada" estado={estado} mes={mes} periodo={periodo}>
+        <SetupNotice titulo="Unidad no encontrada" />
+      </AppShell>
     );
   }
 
@@ -151,129 +147,128 @@ export default async function UnidadPage({
   const baseLimp = rAct.alojamiento + rAct.limpieza;
   const comisionLimpieza = baseLimp > 0 ? (rAct.comisiones * rAct.limpieza) / baseLimp : 0;
 
+  const limpiezaNeta = rAct.limpieza - cleanCost - comisionLimpieza;
+  const tipoLabel =
+    u.tipo === "propiedad" ? "Propiedad" : u.tipo === "master_lease" ? "Master lease" : "Tipo sin definir";
+  const detalleTipo =
+    u.tipo === "propiedad" && u.costeAdquisicion
+      ? ` · adquisición ${eur(u.costeAdquisicion)}`
+      : u.tipo === "master_lease" && u.rentaMensual
+        ? ` · renta ${eur(u.rentaMensual)}/mes`
+        : "";
+  const rendimiento =
+    u.tipo === "propiedad" && nt.yieldPct !== null && rendChip ? (
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
+        <span className="text-xs font-medium text-muted">NOI yield 12 meses</span>
+        <Chip estado={rendChip}>{pctDirecto(nt.yieldPct)}</Chip>
+        <span className="text-xs text-faint">objetivo 9-11%</span>
+      </div>
+    ) : u.tipo === "master_lease" && nt.margenPct !== null && rendChip ? (
+      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
+        <span className="text-xs font-medium text-muted">Margen NOI 12 meses</span>
+        <Chip estado={rendChip}>{pctDirecto(nt.margenPct)}</Chip>
+      </div>
+    ) : undefined;
+
   return (
-    <div className="min-h-screen">
-      <TopBar mes={mes} periodo={periodo} unidades={opts} unidadId={u.listingId} ultimaActualizacion={estado.ultimoExito} />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        <Banner estado={estado} />
+    <AppShell
+      titulo={u.displayName}
+      subtitulo={`${tipoLabel}${detalleTipo} · ${etiqueta}`}
+      acciones={rendimiento}
+      contexto={{ mes, periodo, unidades: opts, unidadId: u.listingId }}
+      estado={estado}
+    >
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+        <KpiCard label="Ocupación" value={pct(occ)}
+          sub={`${num(rAct.vendidas)} de ${num(rAct.disponibles)} noches${rAct.bloqueadas > 0 ? ` · ${num(rAct.bloqueadas)} bloqueadas` : ""}`}
+          deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
+          deltaYoY={delta(occ, ocupacionDe(rPrior))} />
+        <KpiCard label="ADR" value={eur(adr)}
+          sub={stats.estanciaMedia ? `Estancia media ${stats.estanciaMedia.toFixed(1).replace(".", ",")} noches` : undefined}
+          deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
+          deltaYoY={delta(adr, adrDe(rPrior))} />
+        <KpiCard label="RevPAR" value={eur(revpar)}
+          sub={stats.leadTimeMedio ? `Ventana de reserva ${Math.round(stats.leadTimeMedio)} días` : undefined}
+          deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
+          deltaYoY={delta(revpar, revparDe(rPrior))} />
+        <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
+          sub={`Brutos ${eur(rAct.brutos)}`}
+          deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
+          deltaYoY={delta(rAct.netos, rPrior.netos)} />
+        <KpiCard label="NOI" value={eur(rAct.noi)}
+          sub={rAct.limpieza > 0 ? `Limpieza neta ${eur(limpiezaNeta)}` : undefined}
+          deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
+          deltaYoY={delta(rAct.noi, rPrior.noi)} />
+        <KpiCard label="Margen NOI" value={pct(margenNOI)}
+          deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
+          deltaYoY={delta(margenNOI, margenPrior)} />
+      </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold text-ink">{u.displayName}</h1>
-            <p className="text-sm text-muted">
-              {u.tipo === "propiedad" ? "Propiedad" : u.tipo === "master_lease" ? "Master lease" : "Tipo no definido"}
-              {u.tipo === "propiedad" && u.costeAdquisicion ? ` · adquisicion ${eur(u.costeAdquisicion)}` : ""}
-              {u.tipo === "master_lease" && u.rentaMensual ? ` · renta ${eur(u.rentaMensual)}/mes` : ""}
-              {" · "}{etiqueta} ({mesLabel(mes)})
-            </p>
-          </div>
-          <div className="text-right">
-            {u.tipo === "propiedad" && nt.yieldPct !== null && rendChip && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted">NOI yield TTM</span>
-                <Chip estado={rendChip}>{pctDirecto(nt.yieldPct)}</Chip>
-                <span className="text-xs text-faint">objetivo 9-11%</span>
-              </div>
-            )}
-            {u.tipo === "master_lease" && nt.margenPct !== null && rendChip && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted">Margen NOI TTM</span>
-                <Chip estado={rendChip}>{pctDirecto(nt.margenPct)}</Chip>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <KpiCard label="Ocupacion" value={pct(occ)}
-            deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
-            deltaYoY={delta(occ, ocupacionDe(rPrior))} />
-          <KpiCard label="ADR" value={eur(adr)}
-            deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
-            deltaYoY={delta(adr, adrDe(rPrior))} />
-          <KpiCard label="RevPAR" value={eur(revpar)}
-            deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
-            deltaYoY={delta(revpar, revparDe(rPrior))} />
-          <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
-            deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
-            deltaYoY={delta(rAct.netos, rPrior.netos)} />
-          <KpiCard label="NOI" value={eur(rAct.noi)}
-            deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
-            deltaYoY={delta(rAct.noi, rPrior.noi)} />
-          <KpiCard label="Margen NOI" value={pct(margenNOI)}
-            deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
-            deltaYoY={delta(margenNOI, margenPrior)} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <MiniStat label="Noches vendidas" value={num(rAct.vendidas)} />
-          <MiniStat label="Noches bloqueadas" value={num(rAct.bloqueadas)} />
-          <MiniStat label="Estancia media" value={stats.estanciaMedia ? `${stats.estanciaMedia.toFixed(1)} noches` : "-"} />
-          <MiniStat label="Ventana de reserva" value={stats.leadTimeMedio ? `${Math.round(stats.leadTimeMedio)} dias` : "-"} />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <SectionTitle>Ingresos y NOI (ultimos 12 meses)</SectionTitle>
-            <NoiRevenueChart data={serieChart} />
-          </Card>
-          <Card>
-            <SectionTitle>Mix de canales · {etiqueta}</SectionTitle>
-            <ChannelTable data={mix} />
-          </Card>
-        </div>
-
-        <Card>
-          <SectionTitle>Vision futura · proximos 15/30/60/90 dias (on the books)</SectionTitle>
-          <ForwardOutlook ventanas={fwdVentanas} />
-          {insightsFwd.length > 0 && (
-            <div className="mt-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
-                Consejos de revenue
-              </h3>
-              <Insights insights={insightsFwd} />
-            </div>
-          )}
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader titulo="Ingresos y NOI" descripcion="Últimos 12 meses" />
+          <NoiRevenueChart data={serieChart} />
         </Card>
-
         <Card>
-          <SectionTitle>Proximos 6 meses (on the books)</SectionTitle>
+          <CardHeader titulo="Mix de canales" descripcion={etiqueta} />
+          <ChannelTable data={mix} />
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader
+          titulo="Visión futura"
+          descripcion="Ocupación y ADR ya reservados, frente al mismo punto del año pasado"
+        />
+        <ForwardOutlook ventanas={fwdVentanas} />
+        {insightsFwd.length > 0 && (
+          <div className="mt-5">
+            <h3 className="mb-2.5 text-sm font-semibold text-ink">Consejos de revenue</h3>
+            <Insights insights={insightsFwd} />
+          </div>
+        )}
+        <div className="mt-5">
+          <h3 className="mb-2.5 text-sm font-semibold text-ink">Próximos 6 meses</h3>
           <ForwardMeses filas={mesesFwdFilas} />
-        </Card>
-
-        <Card>
-          <SectionTitle>Reviews · {etiqueta}</SectionTitle>
-          <ReviewsCard resumen={revResumen} no5={revNo5} />
-        </Card>
-
-        <Card>
-          <SectionTitle>P&amp;L mensual (ultimos 12 meses)</SectionTitle>
-          <PnLTable serie={serie} />
-        </Card>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <MiniStat label="Margen NOI" value={pct(margenNOI)} />
-          <MiniStat
-            label="Limpieza neta"
-            value={`${eur(rAct.limpieza - cleanCost - comisionLimpieza)}${rAct.limpieza > 0 ? ` (${pct((rAct.limpieza - cleanCost - comisionLimpieza) / rAct.limpieza)})` : ""}`}
-          />
         </div>
+      </Card>
+
+      <Card>
+        <CardHeader titulo="Reviews" descripcion={etiqueta} />
+        <ReviewsCard resumen={revResumen} no5={revNo5} />
+      </Card>
+
+      <Card>
+        <CardHeader
+          titulo="P&L mensual"
+          descripcion="Últimos 12 meses"
+          accion={
+            <LinkFlecha href={`/pnl?mes=${mes}&periodo=ttm&unidad=${u.listingId}`}>
+              Ver hasta caja
+            </LinkFlecha>
+          }
+        />
+        <PnLTable serie={serie} />
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
         <Card>
-          <SectionTitle>Desglose de costes · {etiqueta}</SectionTitle>
+          <CardHeader
+            titulo="Desglose de costes"
+            descripcion={`${etiqueta}${rAct.limpieza > 0 ? ` · limpieza neta ${eur(limpiezaNeta)} (${pct(limpiezaNeta / rAct.limpieza)})` : ""}`}
+          />
           <OpexDetalle categorias={opexCats} ingresos={rAct.brutos} />
         </Card>
+        <Card>
+          <CardHeader titulo="Costes del mes" descripcion={mesLabel(mes)} />
+          <CostBreakdown costes={costes} />
+        </Card>
+      </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <SectionTitle>Reservas ({mesLabel(mes)})</SectionTitle>
-            <ReservationsList reservas={reservas} />
-          </Card>
-          <Card>
-            <SectionTitle>Costes ({mesLabel(mes)})</SectionTitle>
-            <CostBreakdown costes={costes} />
-          </Card>
-        </div>
-      </main>
-    </div>
+      <Card>
+        <CardHeader titulo="Reservas" descripcion={`Estancias con noches en ${mesLabel(mes)}`} />
+        <ReservationsList reservas={reservas} />
+      </Card>
+    </AppShell>
   );
 }

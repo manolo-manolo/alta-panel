@@ -1,9 +1,9 @@
 import { requireSesion } from "@/lib/session";
-import TopBar from "@/components/TopBar";
-import Banner from "@/components/Banner";
-import { Card, SectionTitle, MiniStat } from "@/components/ui";
+import { Download } from "lucide-react";
+import AppShell from "@/components/shell/AppShell";
+import { Card, CardHeader, StatGrid, pillClass } from "@/components/ui";
 import { eur, pct, num } from "@/lib/format";
-import { estadoDatos, mesPorDefecto, getUnidades } from "@/lib/metrics";
+import { estadoDatos, mesPorDefecto } from "@/lib/metrics";
 import {
   calcularEstacionalidad,
   type UnidadEstacionalidad,
@@ -32,39 +32,39 @@ function TablaEstacionalidad({
   esPortfolio: boolean;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[760px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[760px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
-            <th className="px-2 py-2 text-left font-medium">Mes</th>
-            <th className="px-2 py-2 text-right font-medium">Ocupacion</th>
-            <th className="px-2 py-2 text-right font-medium">ADR sin limpieza</th>
-            <th className="px-2 py-2 text-right font-medium">ADR con limpieza</th>
-            <th className="px-2 py-2 text-right font-medium">RevPAR sin</th>
-            <th className="px-2 py-2 text-right font-medium">RevPAR con</th>
+          <tr>
+            <th className="col-fija px-3 py-2.5 text-left">Mes</th>
+            <th className="px-3 py-2.5 text-right">Ocupación</th>
+            <th className="px-3 py-2.5 text-right">ADR sin limpieza</th>
+            <th className="px-3 py-2.5 text-right">ADR con limpieza</th>
+            <th className="px-3 py-2.5 text-right">RevPAR sin</th>
+            <th className="px-3 py-2.5 text-right">RevPAR con</th>
             {esPortfolio && (
               <>
-                <th className="px-2 py-2 text-right font-medium">Indice ADR</th>
-                <th className="px-2 py-2 text-right font-medium">Indice Occ</th>
+                <th className="px-3 py-2.5 text-right">Índice ADR</th>
+                <th className="px-3 py-2.5 text-right">Índice Occ</th>
               </>
             )}
           </tr>
         </thead>
         <tbody>
           {u.meses.map((m) => (
-            <tr key={m.calMes} className="border-b border-line/60">
-              <td className="px-2 py-1.5 text-left text-ink">
+            <tr key={m.calMes}>
+              <td className="col-fija whitespace-nowrap px-3 py-2 text-left font-medium">
                 {MESES_L[m.calMes - 1]}
                 {m.fuente === "otb" && (
                   <span
                     className="ml-1 text-xs text-ok"
-                    title="Reservas ya en cartera: precio contratado y ocupacion reservada como suelo"
+                    title="Reservas ya en cartera: precio contratado y ocupación reservada como suelo"
                   >
                     (otb)
                   </span>
                 )}
                 {m.fuente === "estimado" && m.estimado && (
-                  <span className="ml-1 text-xs text-brand" title="Estimado por nivel x indice">
+                  <span className="ml-1 text-xs text-brand" title="Estimado por nivel x índice">
                     (est.)
                   </span>
                 )}
@@ -72,32 +72,32 @@ function TablaEstacionalidad({
                   <span className="ml-1 text-xs text-faint">({m.nObs} obs)</span>
                 )}
               </td>
-              <td className="px-2 py-1.5 text-right">{pct(m.occ)}</td>
-              <td className="px-2 py-1.5 text-right text-ink">{eur(m.adrSin)}</td>
-              <td className="px-2 py-1.5 text-right">{eur(m.adrCon)}</td>
-              <td className="px-2 py-1.5 text-right text-ink">{eur(m.revparSin)}</td>
-              <td className="px-2 py-1.5 text-right">{eur(m.revparCon)}</td>
+              <td className="px-3 py-2 text-right">{pct(m.occ)}</td>
+              <td className="px-3 py-2 text-right text-ink">{eur(m.adrSin)}</td>
+              <td className="px-3 py-2 text-right">{eur(m.adrCon)}</td>
+              <td className="px-3 py-2 text-right text-ink">{eur(m.revparSin)}</td>
+              <td className="px-3 py-2 text-right">{eur(m.revparCon)}</td>
               {esPortfolio && (
                 <>
-                  <td className="px-2 py-1.5 text-right text-muted">
+                  <td className="px-3 py-2 text-right text-muted">
                     {idxFmt(indices[m.calMes - 1]?.idxAdr ?? null)}
                   </td>
-                  <td className="px-2 py-1.5 text-right text-muted">
+                  <td className="px-3 py-2 text-right text-muted">
                     {idxFmt(indices[m.calMes - 1]?.idxOcc ?? null)}
                   </td>
                 </>
               )}
             </tr>
           ))}
-          <tr className="border-t-2 border-line font-semibold text-ink">
-            <td className="px-2 py-2 text-left">
-              Ano completo{u.ano.algunEstimado ? " (con estimados)" : ""}
+          <tr className="border-t-2 border-line-strong bg-surface-2 font-semibold">
+            <td className="col-fija whitespace-nowrap bg-surface-2 px-3 py-2.5 text-left">
+              Año completo{u.ano.algunEstimado ? " (con estimados)" : ""}
             </td>
-            <td className="px-2 py-2 text-right">{pct(u.ano.occ)}</td>
-            <td className="px-2 py-2 text-right">{eur(u.ano.adrSin)}</td>
-            <td className="px-2 py-2 text-right">{eur(u.ano.adrCon)}</td>
-            <td className="px-2 py-2 text-right">{eur(u.ano.revparSin)}</td>
-            <td className="px-2 py-2 text-right">{eur(u.ano.revparCon)}</td>
+            <td className="px-3 py-2.5 text-right">{pct(u.ano.occ)}</td>
+            <td className="px-3 py-2.5 text-right">{eur(u.ano.adrSin)}</td>
+            <td className="px-3 py-2.5 text-right">{eur(u.ano.adrCon)}</td>
+            <td className="px-3 py-2.5 text-right">{eur(u.ano.revparSin)}</td>
+            <td className="px-3 py-2.5 text-right">{eur(u.ano.revparCon)}</td>
             {esPortfolio && <td colSpan={2} />}
           </tr>
         </tbody>
@@ -123,59 +123,48 @@ export default async function EstacionalidadPage({
     estado = { ultimoExito: null, ultimoLog: null };
   }
 
-  const [unidadesNav, est] = await Promise.all([getUnidades(), calcularEstacionalidad()]);
+  const est = await calcularEstacionalidad();
   const sel = sp.unidad
     ? est.unidades.find((u) => u.nombre === sp.unidad)
     : undefined;
   const activa = sel ?? est.portfolio;
 
-  const chip = (activo: boolean) =>
-    `whitespace-nowrap rounded-full border px-3 py-1 text-sm transition ${
-      activo
-        ? "border-brand bg-brand text-white"
-        : "border-line bg-surface text-muted hover:border-brand hover:text-brand"
-    }`;
-
   return (
-    <div className="min-h-screen">
-      <TopBar
-        mes={mes}
-        periodo={periodo}
-        unidades={unidadesNav.map((u) => ({ listingId: u.listingId, nombre: u.displayName }))}
-        ultimaActualizacion={estado.ultimoExito}
-      />
-      <main className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4">
-        <Banner estado={estado} />
+    <AppShell
+      titulo="Estacionalidad"
+      subtitulo={`ADR y ocupación realistas por mes para underwriting · datos cerrados hasta ${est.cierre}`}
+      acciones={
+        <a
+          href="/api/estacionalidad"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink shadow-card transition hover:border-brand hover:text-brand"
+        >
+          <Download size={15} aria-hidden />
+          Descargar CSV
+        </a>
+      }
+      estado={estado}
+      mes={mes}
+      periodo={periodo}
+    >
+        <StatGrid
+          className="lg:grid-cols-4"
+          items={[
+            { label: "ADR sin limpieza (global)", value: eur(est.global.adrSin) },
+            { label: "ADR con limpieza (global)", value: eur(est.global.adrCon) },
+            { label: "Ocupación (global)", value: pct(est.global.occ) },
+            { label: "Noches en la muestra", value: num(est.global.noches) },
+          ]}
+        />
 
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-lg font-semibold text-ink">
-            Estacionalidad y benchmarks{" "}
-            <span className="text-muted">· datos cerrados hasta {est.cierre}</span>
-          </h1>
-          <a
-            href="/api/estacionalidad"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink hover:border-brand hover:text-brand"
-          >
-            Descargar CSV (para el modelo)
-          </a>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <MiniStat label="ADR sin limpieza (global)" value={eur(est.global.adrSin)} />
-          <MiniStat label="ADR con limpieza (global)" value={eur(est.global.adrCon)} />
-          <MiniStat label="Ocupacion (global)" value={pct(est.global.occ)} />
-          <MiniStat label="Noches en la muestra" value={num(est.global.noches)} />
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          <a href="/estacionalidad" className={chip(!sel)}>
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+          <a href="/estacionalidad" className={pillClass(!sel)}>
             Portfolio
           </a>
           {est.unidades.map((u) => (
             <a
               key={u.nombre}
               href={`/estacionalidad?unidad=${encodeURIComponent(u.nombre)}`}
-              className={chip(sel?.nombre === u.nombre)}
+              className={pillClass(sel?.nombre === u.nombre)}
             >
               {u.nombre}
             </a>
@@ -183,57 +172,54 @@ export default async function EstacionalidadPage({
         </div>
 
         <Card>
-          <SectionTitle>
-            {activa.nombre} · por mes calendario
-            {sel && (
-              <span className="ml-2 normal-case text-faint">
-                {sel.mesesConDatos} meses de datos reales
-                {sel.rampMes ? ` · ${sel.rampMes} excluido como rampa de apertura` : ""}
-                {sel.usaOTB ? " · nivel calibrado con reservas en cartera" : ""}
-              </span>
-            )}
-          </SectionTitle>
+          <CardHeader
+            titulo={`${activa.nombre} · por mes calendario`}
+            descripcion={
+              sel
+                ? `${sel.mesesConDatos} meses de datos reales${sel.rampMes ? ` · ${sel.rampMes} excluido como rampa de apertura` : ""}${sel.usaOTB ? " · nivel calibrado con reservas en cartera" : ""}`
+                : "Media de toda la cartera e índices de estacionalidad"
+            }
+          />
           <TablaEstacionalidad u={activa} indices={est.indices} esPortfolio={!sel} />
         </Card>
 
         <Card>
-          <SectionTitle>Metodo (calculo, no invencion)</SectionTitle>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+          <CardHeader titulo="Método" descripcion="Cálculo sobre datos reales, sin supuestos inventados" />
+          <ul className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
             <li>
               Solo meses cerrados. ADR sin limpieza = alojamiento / noches vendidas;
-              ADR con limpieza anade el ingreso de limpieza. Ocupacion ajustada a la
+              ADR con limpieza añade el ingreso de limpieza. Ocupación ajustada a la
               fecha de inicio real de cada unidad.
             </li>
             <li>
-              Indice de estacionalidad del mes = valor de ese mes calendario en todo
-              el portfolio / media global (ponderado por noches). Indice 1,00 = mes
+              Índice de estacionalidad del mes = valor de ese mes calendario en todo
+              el portfolio / media global (ponderado por noches). Índice 1,00 = mes
               medio.
             </li>
             <li>
               El nivel de ADR de cada unidad se calibra con TODAS sus reservas reales,
               incluidas las futuras en cartera (precios contratados). El nivel de
-              ocupacion propio se pondera con el del portfolio segun los meses
-              cerrados disponibles, para que un unico mes de apertura no condene la
-              proyeccion.
+              ocupación propio se pondera con el del portfolio según los meses
+              cerrados disponibles, para que un único mes de apertura no condene la
+              proyección.
             </li>
             <li>
-              (otb) = mes proximo con reservas ya en cartera: se muestra su ADR
-              contratado y la ocupacion reservada actua como suelo. (est.) = nivel
-              propio x indice del portfolio.
+              (otb) = mes próximo con reservas ya en cartera: se muestra su ADR
+              contratado y la ocupación reservada actúa como suelo. (est.) = nivel
+              propio x índice del portfolio.
             </li>
             <li>
-              El primer mes de operacion de cada unidad se excluye como rampa de
-              apertura (dias bloqueados por puesta a punto, sin reviews): no entra
-              ni en su calibrado ni en los indices del portfolio.
+              El primer mes de operación de cada unidad se excluye como rampa de
+              apertura (días bloqueados por puesta a punto, sin reviews): no entra
+              ni en su calibrado ni en los índices del portfolio.
             </li>
             <li>
-              Para underwriting de una unidad nueva: aplica los indices a tu ADR y
-              ocupacion de referencia. Ojo: un destino de costa (p. ej. Nerja) es mas
-              estacional que Malaga capital; el verano pesa mas y el invierno menos.
+              Para underwriting de una unidad nueva: aplica los índices a tu ADR y
+              ocupación de referencia. Ojo: un destino de costa (p. ej. Nerja) es más
+              estacional que Málaga capital; el verano pesa más y el invierno menos.
             </li>
           </ul>
         </Card>
-      </main>
-    </div>
+    </AppShell>
   );
 }

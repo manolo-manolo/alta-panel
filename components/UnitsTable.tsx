@@ -45,7 +45,7 @@ export default function UnitsTable({
 
   const cols: Col[] = [
     {
-      key: "ocupacion", label: "Ocupacion", align: "right",
+      key: "ocupacion", label: "Ocupación", align: "right",
       render: (f) => pct(f.ocupacion), valor: (f) => f.ocupacion ?? -1,
     },
     {
@@ -111,16 +111,16 @@ export default function UnitsTable({
     }
   }
 
-  const flecha = (key: string) => (sortKey === key ? (desc ? " ▼" : " ▲") : "");
+  const flecha = (key: string) => (sortKey === key ? (desc ? " ↓" : " ↑") : "");
 
   return (
-    <div className="overflow-x-auto">
-      <table className="tabular w-full min-w-[760px] border-collapse text-sm">
+    <div className="scroll-x">
+      <table className="data-table min-w-[760px]">
         <thead>
-          <tr className="border-b border-line text-xs text-faint">
+          <tr>
             <th
               onClick={() => orden("nickname")}
-              className="cursor-pointer px-2 py-2 text-left font-medium hover:text-ink"
+              className="col-fija cursor-pointer px-3 py-2.5 text-left font-medium hover:text-ink"
             >
               Unidad{flecha("nickname")}
             </th>
@@ -128,7 +128,7 @@ export default function UnitsTable({
               <th
                 key={String(c.key)}
                 onClick={() => orden(String(c.key))}
-                className="cursor-pointer px-2 py-2 text-right font-medium hover:text-ink"
+                className="cursor-pointer px-3 py-2.5 text-right font-medium hover:text-ink"
               >
                 {c.label}
                 {flecha(String(c.key))}
@@ -143,7 +143,7 @@ export default function UnitsTable({
               onClick={() => router.push(`/unidad/${f.listingId}?mes=${mes}`)}
               className="cursor-pointer border-b border-line/60 hover:bg-surface-2"
             >
-              <td className="px-2 py-2 text-left">
+              <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left">
                 <div className="flex items-center gap-2">
                   <StatusDot estado={f.estado} />
                   <span className="font-medium text-ink">{f.nickname}</span>
@@ -158,7 +158,7 @@ export default function UnitsTable({
                 </div>
               </td>
               {cols.map((c) => (
-                <td key={String(c.key)} className="px-2 py-2 text-right text-ink">
+                <td key={String(c.key)} className="px-3 py-2.5 text-right text-ink">
                   {c.render(f)}
                 </td>
               ))}
@@ -168,9 +168,9 @@ export default function UnitsTable({
         {total && (
           <tfoot>
             <tr className="border-t-2 border-line font-semibold text-ink">
-              <td className="px-2 py-2 text-left">{total.nickname}</td>
+              <td className="col-fija whitespace-nowrap px-3 py-2.5 text-left">{total.nickname}</td>
               {cols.map((c) => (
-                <td key={String(c.key)} className="px-2 py-2 text-right">
+                <td key={String(c.key)} className="px-3 py-2.5 text-right">
                   {c.render(total)}
                 </td>
               ))}
