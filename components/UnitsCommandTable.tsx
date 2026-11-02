@@ -19,6 +19,8 @@ export interface FilaMando {
   caja: number;
   rendimiento: number | null; // yield o margen TTM, en %
   rendimientoTipo: "yield" | "margen" | null;
+  rendimientoAnualizado?: boolean; // menos de 12 meses operando: yield a ritmo anual
+  mesesOperando?: number;
   occBreakEven: number | null; // ocupacion de equilibrio de caja (TTM)
   occTTM: number | null;
   rating90: number | null;
@@ -144,12 +146,18 @@ export default function UnitsCommandTable({
         {f.rendimiento === null ? (
           <span className="text-faint">-</span>
         ) : (
-          <>
+          <span
+            title={
+              f.rendimientoAnualizado
+                ? `Anualizado: ${f.mesesOperando !== undefined ? `${Math.round(f.mesesOperando)} meses operando` : "menos de 12 meses operando"}, ajustado por estacionalidad`
+                : undefined
+            }
+          >
             {pctDirecto(f.rendimiento)}
             <span className="ml-1 text-xs text-faint">
-              {f.rendimientoTipo === "yield" ? "yield" : "margen"}
+              {f.rendimientoTipo === "yield" ? (f.rendimientoAnualizado ? "anual." : "yield") : "margen"}
             </span>
-          </>
+          </span>
         )}
       </td>
       <td className="whitespace-nowrap px-3 py-2.5 text-right">
@@ -222,7 +230,9 @@ export default function UnitsCommandTable({
         </tfoot>
       </table>
       <p className="mt-2 text-xs text-faint">
-        Ingresos, NOI y caja del periodo seleccionado; yield/margen sobre los últimos 12 meses;
+        Ingresos, NOI y caja del periodo seleccionado; yield/margen sobre los últimos 12 meses
+        cerrados (anual. = unidad con menos de 12 meses operando: yield a ritmo anual, ajustado
+        por estacionalidad);
         Occ b/e = ocupación de equilibrio de caja (en rojo si la ocupación TTM no llega); rating
         de los últimos 90 días; OTB = ocupación ya reservada para los próximos 30 días (▲▼ vs el
         mismo punto del año pasado). Clic en una fila para abrir la unidad.

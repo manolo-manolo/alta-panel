@@ -59,7 +59,7 @@ export default function AppShell({
               </h1>
               {subtitulo && <p className="mt-1 text-sm text-muted">{subtitulo}</p>}
             </div>
-            {acciones && <div className="flex shrink-0 items-center gap-2">{acciones}</div>}
+            {acciones && <div className="flex max-w-full min-w-0 items-center gap-2 sm:shrink-0">{acciones}</div>}
           </header>
           {contexto && (
             <ContextBar

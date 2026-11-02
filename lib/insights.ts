@@ -15,6 +15,7 @@ export interface InsightInput {
     tipo: "propiedad" | "master_lease" | null;
     rendimiento: number | null; // yield o margen %
     rendimientoTipo: "yield" | "margen" | null;
+    rendimientoAnualizado?: boolean; // menos de 12 meses operando: yield a ritmo anual
     costesPendientes: boolean;
   }[];
   limpiezaNeto: number;
@@ -55,14 +56,14 @@ export function generarInsights(i: InsightInput): Insight[] {
   if (propBaja.length) {
     alertas.push({
       tono: "alerta",
-      texto: `NOI yield por debajo del 7% en: ${propBaja.map((p) => `${p.nombre} (${pct1(p.rendimiento! / 100)})`).join(", ")}.`,
+      texto: `NOI yield por debajo del 7% en: ${propBaja.map((p) => `${p.nombre} (${pct1(p.rendimiento! / 100)}${p.rendimientoAnualizado ? " anualizado" : ""})`).join(", ")}.`,
     });
   }
   const propBuena = i.filas.filter((f) => f.rendimientoTipo === "yield" && f.rendimiento !== null && f.rendimiento >= 9);
   if (propBuena.length) {
     buenas.push({
       tono: "bueno",
-      texto: `NOI yield en banda objetivo (>=9%): ${propBuena.map((p) => `${p.nombre} (${pct1(p.rendimiento! / 100)})`).join(", ")}.`,
+      texto: `NOI yield de 9% o más: ${propBuena.map((p) => `${p.nombre} (${pct1(p.rendimiento! / 100)}${p.rendimientoAnualizado ? " anualizado" : ""})`).join(", ")}.`,
     });
   }
 

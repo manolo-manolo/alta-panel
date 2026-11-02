@@ -10,7 +10,7 @@ import { generarInsightsForward } from "@/lib/forward-insights";
 import ForwardOutlook from "@/components/ForwardOutlook";
 import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
 import { forwardKpis } from "@/lib/forward";
-import { sumarMeses } from "@/lib/time";
+import { mesActualMadrid, sumarMeses } from "@/lib/time";
 import ReviewsCard from "@/components/ReviewsCard";
 import UnitsTable, { type FilaUnidad } from "@/components/UnitsTable";
 import { estadoUnidad } from "@/lib/status";
@@ -30,6 +30,8 @@ import {
   reviewsNo5,
   costesLimpieza,
   noiTTM,
+  pesosEstacionales,
+  compararInteranual,
   ttm,
   mesPorDefecto,
   mesPrevio,
@@ -38,9 +40,11 @@ import {
   rangoFechas,
   etiquetaPeriodo,
   type Periodo,
+  type Rollup,
   type UnidadMes,
   type UnidadInfo,
 } from "@/lib/metrics";
+import type { TotalesChart } from "@/components/charts/MetricChart";
 
 export const dynamic = "force-dynamic";
 
@@ -90,7 +94,7 @@ export default async function PortfolioPage({
   const mesesTTMprev = desplazarMeses(mesesTTM, -12);
   // Proximos 6 meses (relativos a hoy, no al mes seleccionado).
   const mesesForward = Array.from({ length: 6 }, (_, i) =>
-    sumarMeses(mesPorDefecto(), i + 1),
+    sumarMeses(mesActualMadrid(), i + 1),
   );
   const todos = Array.from(
     new Set([...periodMeses, ...priorMeses, ...mesesTTM, ...mesesTTMprev, prevMes, ...mesesForward]),
@@ -105,16 +109,38 @@ export default async function PortfolioPage({
     meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x);
 
   const rAct = sumar(itemsDe(periodMeses));
-  const rPrior = sumar(itemsDe(priorMeses));
   const rPrev = sumar(itemsDe([prevMes]));
   const esMes = periodo === "mes";
+
+  // Interanual homogeneo: solo meses con ano anterior sincronizado, y aparte
+  // like-for-like (mismas unidades operando los dos anos).
+  const cmp = compararInteranual(map, unidades, periodMeses);
+  const hayCmp = cmp.meses.length > 0;
+  const yoy = (f: (r: Rollup) => number | null) => (hayCmp ? delta(f(cmp.act), f(cmp.prior)) : null);
+  const lfl = (f: (r: Rollup) => number | null) =>
+    hayCmp && cmp.lflDistinto ? delta(f(cmp.lfl.act), f(cmp.lfl.prior)) : undefined;
+  const etiquetaYoY =
+    hayCmp && cmp.meses.length < periodMeses.length ? `vs año ant. (${cmp.meses.length} m)` : "vs año ant.";
+  const tituloYoY = !hayCmp
+    ? "El año anterior queda fuera del histórico sincronizado (18 meses)."
+    : cmp.meses.length < periodMeses.length
+      ? `Solo los ${cmp.meses.length} meses con año anterior en el histórico sincronizado, frente a los mismos meses del año anterior.`
+      : "Mismo periodo del año anterior, todas las unidades.";
+  const tituloLfl = `Solo meses en que cada unidad operaba los dos años (${cmp.lfl.unidades} unidades): separa el crecimiento por compras del de gestión.`;
+  const margenDe = (r: Rollup) => (r.brutos > 0 ? r.noi / r.brutos : null);
+  const deltasYoY = (f: (r: Rollup) => number | null) => ({
+    deltaYoY: yoy(f),
+    deltaLfl: lfl(f),
+    etiquetaYoY,
+    tituloYoY,
+    tituloLfl,
+  });
 
   const occ = ocupacionDe(rAct);
   const adr = adrDe(rAct);
   const revpar = revparDe(rAct);
 
   const serie = seriePnL(map, unidades, mesesTTM);
-  const seriePrior = seriePnL(map, unidades, mesesTTMprev);
   const chartData = serie.map((s) => ({
     mes: s.mes,
     ingresos: s.brutos,
@@ -137,7 +163,25 @@ export default async function PortfolioPage({
     };
   };
   const ttmTot = totalesChart(serie);
-  const ttmPrevTot = totalesChart(seriePrior);
+  const rollupChart = (r: Rollup): TotalesChart => ({
+    ingresos: r.brutos,
+    noi: r.noi,
+    adr: adrDe(r),
+    occ: ocupacionDe(r),
+  });
+  const cmpTTM = compararInteranual(map, unidades, mesesTTM);
+  const cmpChart =
+    cmpTTM.meses.length > 0
+      ? {
+          meses: cmpTTM.meses.length,
+          act: rollupChart(cmpTTM.act),
+          prior: rollupChart(cmpTTM.prior),
+          lfl: cmpTTM.lflDistinto
+            ? { act: rollupChart(cmpTTM.lfl.act), prior: rollupChart(cmpTTM.lfl.prior) }
+            : null,
+        }
+      : null;
+  const pesos = pesosEstacionales(map, unidades, mesesTTM);
 
   const { desde, hastaExcl } = rangoFechas(periodMeses);
   const [mix, fwd, stats, revResumen, revNo5, cleanCostPortfolio] =
@@ -151,8 +195,7 @@ export default async function PortfolioPage({
     ]);
 
   // Margen NOI y desglose de limpieza (sobre el periodo, portfolio o unidad pnl)
-  const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
-  const margenPrior = rPrior.brutos > 0 ? rPrior.noi / rPrior.brutos : null;
+  const margenNOI = margenDe(rAct);
   const rProp = sumar(
     unidades.filter((u) => u.tipo === "propiedad").flatMap((u) => itemsUnidad(u, periodMeses)),
   );
@@ -167,7 +210,7 @@ export default async function PortfolioPage({
   // Filas por unidad (agregadas al periodo) + fila total.
   const filas: FilaUnidad[] = unidades.map((u) => {
     const r = sumar(itemsUnidad(u, periodMeses));
-    const nt = noiTTM(u, map, mesesTTM);
+    const nt = noiTTM(u, map, mesesTTM, pesos);
     const rendimiento = u.tipo === "propiedad" ? nt.yieldPct : u.tipo === "master_lease" ? nt.margenPct : null;
     const umActual = map.get(`${u.listingId}|${mes}`);
     return {
@@ -182,6 +225,8 @@ export default async function PortfolioPage({
       noiTTM: nt.noiTTM,
       rendimiento,
       rendimientoTipo: u.tipo === "propiedad" ? "yield" : u.tipo === "master_lease" ? "margen" : null,
+      rendimientoAnualizado: u.tipo === "propiedad" && nt.anualizado,
+      mesesOperando: nt.mesesOperando,
       estado: estadoUnidad({
         tipo: u.tipo,
         ocupacion: ocupacionDe(r),
@@ -193,14 +238,16 @@ export default async function PortfolioPage({
     };
   });
 
-  // Total portfolio (medias ponderadas y sumas).
-  const noiTTMPortfolio = unidades.reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
-  const costeOwned = unidades
+  // Total portfolio (medias ponderadas y sumas). El yield de cartera usa el
+  // ritmo anual de cada unidad en propiedad (anualizado si opero menos de 12
+  // meses); las que llevan menos de 2 meses no tienen ritmo y quedan fuera.
+  const noiTTMPortfolio = unidades.reduce((s, u) => s + noiTTM(u, map, mesesTTM, pesos).noiTTM, 0);
+  const propiasConRitmo = unidades
     .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
-    .reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
-  const noiTTMOwned = unidades
-    .filter((u) => u.tipo === "propiedad" && u.costeAdquisicion)
-    .reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+    .map((u) => ({ u, nt: noiTTM(u, map, mesesTTM, pesos) }))
+    .filter((x) => x.nt.noiAnual !== null);
+  const costeOwned = propiasConRitmo.reduce((s, x) => s + (x.u.costeAdquisicion ?? 0), 0);
+  const noiAnualOwned = propiasConRitmo.reduce((s, x) => s + (x.nt.noiAnual ?? 0), 0);
   const total: FilaUnidad = {
     listingId: "__total__",
     nickname: "Portfolio",
@@ -211,8 +258,9 @@ export default async function PortfolioPage({
     netos: rAct.netos,
     noiMes: rAct.noi,
     noiTTM: noiTTMPortfolio,
-    rendimiento: costeOwned > 0 ? (noiTTMOwned / costeOwned) * 100 : null,
+    rendimiento: costeOwned > 0 ? (noiAnualOwned / costeOwned) * 100 : null,
     rendimientoTipo: "yield",
+    rendimientoAnualizado: propiasConRitmo.some((x) => x.nt.anualizado),
     estado: null,
     costesPendientes: false,
   };
@@ -230,6 +278,7 @@ export default async function PortfolioPage({
     filas: filas.map((f) => ({
       nombre: f.nickname, ocupacion: f.ocupacion, tipo: f.tipo,
       rendimiento: f.rendimiento, rendimientoTipo: f.rendimientoTipo,
+      rendimientoAnualizado: f.rendimientoAnualizado,
       costesPendientes: f.costesPendientes,
     })),
     limpiezaNeto: limpiezaNetoPortfolio,
@@ -273,27 +322,27 @@ export default async function PortfolioPage({
         <KpiCard label="Ocupación" value={pct(occ)}
           sub={`${num(rAct.vendidas)} de ${num(rAct.disponibles)} noches${rAct.bloqueadas > 0 ? ` · ${num(rAct.bloqueadas)} bloqueadas` : ""}`}
           deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
-          deltaYoY={delta(occ, ocupacionDe(rPrior))} />
+          {...deltasYoY(ocupacionDe)} />
         <KpiCard label="ADR" value={eur(adr)}
           sub={stats.estanciaMedia ? `Estancia media ${stats.estanciaMedia.toFixed(1).replace(".", ",")} noches` : undefined}
           deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
-          deltaYoY={delta(adr, adrDe(rPrior))} />
+          {...deltasYoY(adrDe)} />
         <KpiCard label="RevPAR" value={eur(revpar)}
           sub={stats.leadTimeMedio ? `Ventana de reserva ${Math.round(stats.leadTimeMedio)} días` : undefined}
           deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
-          deltaYoY={delta(revpar, revparDe(rPrior))} />
+          {...deltasYoY(revparDe)} />
         <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
           sub={`Brutos ${eur(rAct.brutos)}`}
           deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
-          deltaYoY={delta(rAct.netos, rPrior.netos)} />
+          {...deltasYoY((r) => r.netos)} />
         <KpiCard label="NOI" value={eur(rAct.noi)}
           sub={rAct.limpieza > 0 ? `Limpieza neta ${eur(limpiezaNetoPortfolio)}` : undefined}
           deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
-          deltaYoY={delta(rAct.noi, rPrior.noi)} />
+          {...deltasYoY((r) => r.noi)} />
         <KpiCard label="Margen NOI" value={pct(margenNOI)}
           sub={`Propiedad ${pct(margenProp, 0)} · Master lease ${pct(margenMaster, 0)}`}
-          deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
-          deltaYoY={delta(margenNOI, margenPrior)} />
+          deltaMoM={esMes ? delta(margenNOI, margenDe(rPrev)) : undefined}
+          {...deltasYoY(margenDe)} />
       </div>
 
       {insights.length > 0 && (
@@ -309,8 +358,16 @@ export default async function PortfolioPage({
 
       <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader titulo="Evolución" descripcion="Últimos 12 meses" />
-          <MetricChart data={chartData} ttm={ttmTot} ttmPrev={ttmPrevTot} />
+          <CardHeader
+            titulo="Evolución"
+            descripcion={`12 meses cerrados hasta ${etiquetaPeriodo(mesesTTM[mesesTTM.length - 1], "mes").toLowerCase()}`}
+            accion={
+              <LinkFlecha href={`/unidades?mes=${mes}&periodo=${periodo}#ocupacion`}>
+                De dónde sale la ocupación
+              </LinkFlecha>
+            }
+          />
+          <MetricChart data={chartData} ttm={ttmTot} cmp={cmpChart} />
         </Card>
         <Card>
           <CardHeader titulo="Mix de canales" descripcion={etiqueta} />

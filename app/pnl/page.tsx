@@ -20,6 +20,7 @@ import {
   sumar,
   seriePnL,
   noiTTM,
+  pesosEstacionales,
   costesPorCategoria,
   estadoDatos,
   ttm,
@@ -29,6 +30,7 @@ import {
   type Periodo,
   type UnidadMes,
 } from "@/lib/metrics";
+import { ritmoCajaAlcance } from "@/lib/acciones";
 
 export const dynamic = "force-dynamic";
 const PERIODOS = ["mes", "ytd", "ttm", "ano"];
@@ -98,21 +100,35 @@ export default async function PnlPage({
   );
   const cashOnCash = equity > 0 ? (totalTTM.caja / equity) * 100 : null;
 
-  // Lectura rapida del P&L de caja.
-  const consejosCaja: Insight[] = lecturaCaja(totalTTM, equity, !!sel);
+  // Unidades con menos de 12 meses: su caja de 12 meses son unos pocos meses,
+  // asi que DSCR y cash-on-cash se dan tambien a ritmo anual.
+  const pesos = pesosEstacionales(map, unidades, mesesTTM);
+  const ritmo = ritmoCajaAlcance({ alcance, unidades, map, mesesTTM, pesos });
+  const conRitmo = !!ritmo && ritmo.parciales.length > 0;
 
-  // Patrimonio orientativo: valor implicito por cap rate sobre el NOI TTM de
-  // las unidades en propiedad del alcance, contra la deuda viva real.
+  // Lectura rapida del P&L de caja.
+  const consejosCaja: Insight[] = lecturaCaja(totalTTM, equity, !!sel, ritmo);
+
+  // Patrimonio orientativo: valor implicito por cap rate sobre el NOI a ritmo
+  // anual de las unidades en propiedad del alcance, contra la deuda viva real.
+  // Las que llevan menos de 2 meses no tienen ritmo: se valoran a coste.
   const propias = alcance.filter(
     (u) =>
-      (u.costeAdquisicion && u.costeAdquisicion > 0) ||
-      prestamoDeUnidad(u.displayName, u.nickname),
+      u.finOperacion === null &&
+      ((u.costeAdquisicion && u.costeAdquisicion > 0) ||
+        prestamoDeUnidad(u.displayName, u.nickname)),
   );
-  const noiTTMPropio = propias.reduce((s, u) => s + noiTTM(u, map, mesesTTM).noiTTM, 0);
+  const ntPropias = propias.map((u) => ({ u, nt: noiTTM(u, map, mesesTTM, pesos) }));
+  const noiRitmoPropio = ntPropias.reduce((s, x) => s + (x.nt.noiAnual ?? 0), 0);
+  const anualizadasPropias = ntPropias.filter((x) => x.nt.anualizado && x.nt.noiAnual !== null);
+  const aCoste = ntPropias.filter((x) => x.nt.noiAnual === null);
+  const costeSinRitmo = aCoste.reduce((s, x) => s + (x.u.costeAdquisicion ?? 0), 0);
   const costePropio = propias.reduce((s, u) => s + (u.costeAdquisicion ?? 0), 0);
-  const valorRef = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.ref : null;
-  const valorMin = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.max : null;
-  const valorMax = noiTTMPropio > 0 ? noiTTMPropio / CAP_RATE.min : null;
+  const valorCon = (cap: number) =>
+    noiRitmoPropio > 0 || costeSinRitmo > 0 ? Math.max(0, noiRitmoPropio) / cap + costeSinRitmo : null;
+  const valorRef = valorCon(CAP_RATE.ref);
+  const valorMin = valorCon(CAP_RATE.max);
+  const valorMax = valorCon(CAP_RATE.min);
   const equityNeto = valorRef !== null ? valorRef - deudaViva : null;
   const ltvActual = valorRef && valorRef > 0 ? deudaViva / valorRef : null;
 
@@ -125,7 +141,7 @@ export default async function PnlPage({
   return (
     <AppShell
       titulo="P&L y caja"
-      subtitulo={`${alcanceNombre} · 12 meses hasta ${mesLabel(mes)}`}
+      subtitulo={`${alcanceNombre} · 12 meses cerrados hasta ${mesLabel(mesesTTM[mesesTTM.length - 1])}`}
       contexto={{ mes, periodo }}
       estado={estado}
     >
@@ -168,14 +184,26 @@ export default async function PnlPage({
         <KpiCard
           label="DSCR 12 meses"
           value={dscrTTM !== null ? `${coma2(dscrTTM)}x` : "Sin deuda"}
-          sub="NOI / servicio de deuda"
+          sub={
+            conRitmo && ritmo!.dscr !== null
+              ? `A ritmo anual ${coma2(ritmo!.dscr)}x (unidades nuevas)`
+              : "NOI / servicio de deuda"
+          }
         />
         <KpiCard label="Deuda viva" value={eur(deudaViva)} />
-        <KpiCard
-          label="Cash-on-cash 12 meses"
-          value={cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}
-          sub="Caja sobre equity invertido"
-        />
+        {conRitmo && ritmo!.cashOnCash !== null ? (
+          <KpiCard
+            label="Cash-on-cash anualizado"
+            value={pctDirecto(ritmo!.cashOnCash)}
+            sub={`Real 12 meses ${cashOnCash !== null ? pctDirecto(cashOnCash) : "-"} · ${ritmo!.parciales.join(", ")} a ritmo anual`}
+          />
+        ) : (
+          <KpiCard
+            label="Cash-on-cash 12 meses"
+            value={cashOnCash !== null ? pctDirecto(cashOnCash) : "-"}
+            sub="Caja sobre equity invertido"
+          />
+        )}
         <KpiCard
           label="Amortización 12 meses"
           value={eur(totalTTM.principal)}
@@ -193,7 +221,7 @@ export default async function PnlPage({
       <Card>
         <CardHeader
           titulo="Cuenta de resultados hasta caja"
-          descripcion={`${alcanceNombre} · mes a mes, últimos 12 meses`}
+          descripcion={`${alcanceNombre} · mes a mes, 12 meses cerrados`}
         />
         <PnLTable serie={serieCash} />
       </Card>
@@ -216,11 +244,18 @@ export default async function PnlPage({
             ]}
           />
           <p className="mt-3 text-xs text-faint">
-            Valor = NOI de 12 meses de las unidades en propiedad ({eur(noiTTMPropio)}) capitalizado
-            a un cap rate del {Math.round(CAP_RATE.min * 100)}-{Math.round(CAP_RATE.max * 100)}%
-            (referencia {Math.round(CAP_RATE.ref * 100)}%). Es una referencia de gestión, no una
-            tasación. El equity neto usa el valor de referencia menos la deuda viva real; cada mes
-            se suman ~{eur(totalTTM.principal / 12)} de amortización al patrimonio.
+            Valor = NOI a ritmo anual de las unidades en propiedad ({eur(noiRitmoPropio)}
+            {anualizadasPropias.length > 0
+              ? `; anualizado por estacionalidad para ${anualizadasPropias.map((x) => x.u.displayName).join(", ")}`
+              : ""}
+            ) capitalizado a un cap rate del {Math.round(CAP_RATE.min * 100)}-
+            {Math.round(CAP_RATE.max * 100)}% (referencia {Math.round(CAP_RATE.ref * 100)}%).
+            {aCoste.length > 0
+              ? ` ${aCoste.map((x) => x.u.displayName).join(", ")} ${aCoste.length > 1 ? "llevan" : "lleva"} menos de 2 meses operando: se ${aCoste.length > 1 ? "valoran" : "valora"} a coste (${eur(costeSinRitmo)}).`
+              : ""}{" "}
+            Es una referencia de gestión, no una tasación. El equity neto usa el valor de
+            referencia menos la deuda viva real; cada mes se suman ~{eur(totalTTM.principal / 12)}{" "}
+            de amortización al patrimonio.
           </p>
         </Card>
       )}

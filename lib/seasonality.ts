@@ -1,6 +1,7 @@
 import "server-only";
 import { query } from "@/lib/db";
 import { mesActualMadrid, sumarMeses } from "@/lib/time";
+import { fechaCobertura, sqlInventario } from "@/lib/inventario";
 
 /**
  * Estacionalidad y benchmarks para underwriting de nuevas unidades.
@@ -129,25 +130,23 @@ export async function calcularEstacionalidad(): Promise<Estacionalidad> {
      FROM reservation_nights n
      JOIN listings l ON l.id = n.listing_id
      LEFT JOIN unit_settings s ON s.listing_id = l.id
+     WHERE n.night >= $1::date
      GROUP BY unidad, n.mes`,
+    [fechaCobertura()],
   );
 
-  // Disponibilidad ajustada al inicio real (todos los meses sincronizados).
+  // Inventario efectivo (lib/inventario.ts) de todos los meses con historico.
+  // Ventas e inventario empiezan en la misma fecha de cobertura: antes, el sync
+  // semanal ya borro las reservas y solo quedarian noches libres.
   const dispo = await query<{ unidad: string; mes: string; disp: string }>(
-    `WITH starts AS (
-       SELECT l.id AS listing_id,
-              COALESCE(s.fecha_inicio,
-                       (SELECT MIN(night) FROM reservation_nights n WHERE n.listing_id = l.id)) AS inicio
-       FROM listings l LEFT JOIN unit_settings s ON s.listing_id = l.id
-     )
+    `WITH ${sqlInventario("$1")}
      SELECT COALESCE(s.display_name, l.nickname) AS unidad, a.mes,
-            COUNT(*) FILTER (WHERE a.is_available) AS disp
-     FROM listing_availability a
+            COUNT(*) FILTER (WHERE a.disponible) AS disp
+     FROM inventario a
      JOIN listings l ON l.id = a.listing_id
      LEFT JOIN unit_settings s ON s.listing_id = l.id
-     JOIN starts st ON st.listing_id = a.listing_id
-     WHERE st.inicio IS NOT NULL AND a.date >= st.inicio
      GROUP BY unidad, a.mes`,
+    [fechaCobertura()],
   );
   const dispMap = new Map<string, number>();
   for (const d of dispo) dispMap.set(`${d.unidad}|${d.mes}`, Number(d.disp));

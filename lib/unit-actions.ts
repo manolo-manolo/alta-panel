@@ -24,12 +24,15 @@ export interface UnidadAccionInput {
   nombre: string;
   tipo: "propiedad" | "master_lease" | null;
   // Periodo seleccionado
+  etiquetaPeriodo: string; // p. ej. "octubre 2026" o "últimos 12 meses hasta octubre 2026"
   caja: number;
   tieneDeuda: boolean;
   costesPendientes: boolean;
   // Base TTM
-  yieldPct: number | null;
+  yieldPct: number | null; // sobre ritmo anual si la unidad opero menos de 12 meses
   margenPct: number | null;
+  rendimientoAnualizado: boolean;
+  mesesOperando: number;
   occBreakEven: number | null;
   occTTM: number | null;
   disponiblesTTM: number;
@@ -275,7 +278,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "alerta",
       palanca: "estructura",
       impacto: null,
-      texto: `Caja negativa en el periodo (${eur0(i.caja)}): el NOI no cubre overhead y servicio de deuda.`,
+      texto: `Caja negativa en ${i.etiquetaPeriodo} (${eur0(i.caja)}): el NOI no cubre overhead y servicio de deuda.`,
     });
   }
 
@@ -285,7 +288,9 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "info",
       palanca: "estructura",
       impacto: null,
-      texto: `Yield TTM del ${i.yieldPct.toFixed(1).replace(".", ",")}% sobre inversion, por debajo de la banda objetivo (9-11%).`,
+      texto: i.rendimientoAnualizado
+        ? `NOI yield anualizado del ${i.yieldPct.toFixed(1).replace(".", ",")}% sobre inversión (${Math.round(i.mesesOperando)} meses operando, ajustado por estacionalidad), por debajo de la banda objetivo (9-11%).`
+        : `NOI yield de 12 meses del ${i.yieldPct.toFixed(1).replace(".", ",")}% sobre inversión, por debajo de la banda objetivo (9-11%).`,
     });
   }
   if (i.tipo === "master_lease" && i.margenPct !== null && i.margenPct < 15) {
@@ -293,7 +298,7 @@ export function accionesUnidad(i: UnidadAccionInput): AccionUnidad[] {
       tono: "info",
       palanca: "estructura",
       impacto: null,
-      texto: `Margen NOI TTM del ${i.margenPct.toFixed(1).replace(".", ",")}%: poco colchon sobre la renta.`,
+      texto: `Margen NOI de 12 meses del ${i.margenPct.toFixed(1).replace(".", ",")}%: poco colchón sobre la renta.`,
     });
   }
 

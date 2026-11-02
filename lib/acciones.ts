@@ -16,9 +16,12 @@ import {
   equityUnidad,
   breakEvenOcc,
   lecturaCaja,
+  ritmoCaja,
+  type RitmoCaja,
   type UnidadFinanciacion,
   type PnLCashMes,
 } from "@/lib/finance";
+import { FINANCIACION } from "@/lib/config";
 import { hoyMadrid, sumarDias, sumarMeses } from "@/lib/time";
 import {
   getUnidades,
@@ -29,6 +32,9 @@ import {
   revparDe,
   seriePnL,
   noiTTM,
+  pesosEstacionales,
+  fraccionOperativa,
+  etiquetaPeriodo,
   ratingsPorUnidad,
   ttm,
   mesPorDefecto,
@@ -63,6 +69,7 @@ export interface CentroAcciones {
 
 export interface ContextoAcciones {
   mes: string;
+  periodo: Periodo;
   periodMeses: string[];
   mesesTTM: string[];
   unidades: UnidadInfo[];
@@ -73,6 +80,7 @@ export interface ContextoAcciones {
   limpiezaCosteTTM: Map<string, number>; // por nickname
   seriePortfolioPeriodo: PnLMes[];
   seriePortfolioTTM: PnLMes[];
+  pesos: Map<string, number> | null; // estacionalidad para anualizar unidades nuevas
 }
 
 export interface DatosUnidad {
@@ -85,6 +93,8 @@ export interface DatosUnidad {
   v15: VentanaForward | undefined;
   rating: RatingUnidad | undefined;
   occBreakEven: number | null;
+  /** Base del equilibrio de caja: solo meses operados (sumable entre unidades). */
+  baseEquilibrio: Parameters<typeof breakEvenOcc>[0];
   tieneDeuda: boolean;
   costesPendientes: boolean;
   caja: number; // periodo
@@ -137,6 +147,7 @@ export async function cargarContexto(mes: string, periodo: Periodo): Promise<Con
 
   return {
     mes,
+    periodo,
     periodMeses,
     mesesTTM,
     unidades,
@@ -147,7 +158,72 @@ export async function cargarContexto(mes: string, periodo: Periodo): Promise<Con
     limpiezaCosteTTM,
     seriePortfolioPeriodo: seriePnL(map, unidades, periodMeses),
     seriePortfolioTTM: seriePnL(map, unidades, mesesTTM),
+    pesos: pesosEstacionales(map, unidades, mesesTTM),
   };
+}
+
+/**
+ * Caja a ritmo anual de un alcance (portfolio o una unidad) cuando alguna de
+ * sus unidades lleva menos de 12 meses operando; null si todas tienen el ano
+ * completo (entonces la cifra real de 12 meses ya es el ritmo).
+ * Unidades con menos de 2 meses no tienen ritmo fiable: quedan fuera del todo
+ * (NOI, deuda y equity) y se listan en `sinDatos`.
+ */
+export function ritmoCajaAlcance(p: {
+  alcance: UnidadInfo[];
+  unidades: UnidadInfo[];
+  map: Map<string, UnidadMes>;
+  mesesTTM: string[];
+  pesos: Map<string, number> | null;
+}): (RitmoCaja & { sinDatos: string[] }) | null {
+  const nt = new Map(p.unidades.map((u) => [u.listingId, noiTTM(u, p.map, p.mesesTTM, p.pesos)]));
+  const parciales = p.alcance.filter((u) => {
+    const x = nt.get(u.listingId)!;
+    return x.anualizado && x.mesesOperando > 0;
+  });
+  if (parciales.length === 0) return null;
+  const incluidas = p.alcance.filter((u) => nt.get(u.listingId)!.noiAnual !== null);
+  // Los listings dados de baja no forman parte del ritmo (ni NOI ni deuda).
+  const sinDatos = p.alcance
+    .filter(
+      (u) =>
+        u.finOperacion === null &&
+        nt.get(u.listingId)!.noiAnual === null &&
+        nt.get(u.listingId)!.mesesOperando > 0,
+    )
+    .map((u) => u.displayName);
+
+  const noiAnual = incluidas.reduce((s, u) => s + (nt.get(u.listingId)!.noiAnual ?? 0), 0);
+  // Overhead: el reparto real es por cuota de ingresos netos; a ritmo anual,
+  // por cuota de ingresos anuales del alcance sobre el total del portfolio.
+  const netosAnual = (us: UnidadInfo[]) =>
+    us.reduce((s, u) => {
+      const x = nt.get(u.listingId)!;
+      return s + Math.max(0, x.netosAnual ?? 0);
+    }, 0);
+  const totalNetos = netosAnual(p.unidades);
+  const overheadAnual =
+    totalNetos > 0
+      ? (FINANCIACION.overheadAnualEur * netosAnual(incluidas)) / totalNetos
+      : (FINANCIACION.overheadAnualEur * incluidas.length) / Math.max(1, p.unidades.length);
+  // Cuota actual de deuda (ultimo mes del TTM) de cada unidad incluida.
+  const ultimoMes = p.mesesTTM[p.mesesTTM.length - 1];
+  const servicioMensual = incluidas.reduce((s, u) => {
+    const c = seriePnLCash(seriePnL(p.map, [u], [ultimoMes]), seriePnL(p.map, p.unidades, [ultimoMes]), [finDe(u)], p.unidades.length);
+    return s + (c[0] ? c[0].intereses + c[0].principal : 0);
+  }, 0);
+  const equity = incluidas.reduce(
+    (s, u) => s + equityUnidad(u.costeAdquisicion, prestamoDeUnidad(u.displayName, u.nickname)),
+    0,
+  );
+  const r = ritmoCaja({
+    noiAnual,
+    overheadAnual,
+    servicioMensual,
+    equity,
+    parciales: parciales.filter((u) => incluidas.includes(u)).map((u) => u.displayName),
+  });
+  return { ...r, sinDatos };
 }
 
 /** Datos derivados de una unidad (periodo + TTM + caja + cartera). */
@@ -168,24 +244,31 @@ export function datosUnidad(ctx: ContextoAcciones, u: UnidadInfo): DatosUnidad {
     n,
   );
   const ventanas = ctx.fwd.porUnidad.get(u.listingId) ?? [];
+  // Equilibrio de caja solo con meses operados: la deuda o los fijos de antes
+  // del arranque no se pueden repartir entre noches que aun no existian.
+  const mesesOper = ctx.mesesTTM.filter((m) => fraccionOperativa(u, m) > 0);
+  const rOper = sumar(itemsUnidad(ctx.map, u, mesesOper));
+  const cashOper = cashTTM.filter((m) => mesesOper.includes(m.mes));
+  const baseEquilibrio = {
+    netos: rOper.netos,
+    costesVariables: rOper.costesVariables,
+    costesFijos: rOper.costesFijos,
+    vendidas: rOper.vendidas,
+    disponibles: rOper.disponibles,
+    overhead: cashOper.reduce((s, m) => s + m.overhead, 0),
+    servicioDeuda: cashOper.reduce((s, m) => s + m.intereses + m.principal, 0),
+  };
   return {
     r,
     rTTM,
     cashPeriodo,
     cashTTM,
-    nt: noiTTM(u, ctx.map, ctx.mesesTTM),
+    nt: noiTTM(u, ctx.map, ctx.mesesTTM, ctx.pesos),
     v30: ventanas.find((v) => v.dias === 30),
     v15: ventanas.find((v) => v.dias === 15),
     rating: ctx.ratings.get(u.listingId),
-    occBreakEven: breakEvenOcc({
-      netos: rTTM.netos,
-      costesVariables: rTTM.costesVariables,
-      costesFijos: rTTM.costesFijos,
-      vendidas: rTTM.vendidas,
-      disponibles: rTTM.disponibles,
-      overhead: cashTTM.reduce((s, m) => s + m.overhead, 0),
-      servicioDeuda: cashTTM.reduce((s, m) => s + m.intereses + m.principal, 0),
-    }),
+    occBreakEven: breakEvenOcc(baseEquilibrio),
+    baseEquilibrio,
     tieneDeuda:
       !!prestamoDeUnidad(u.displayName, u.nickname) ||
       !!(u.costeAdquisicion && u.costeAdquisicion > 0),
@@ -201,11 +284,14 @@ export function accionesDeUnidad(ctx: ContextoAcciones, u: UnidadInfo, d: DatosU
   return accionesUnidad({
     nombre: u.displayName,
     tipo: u.tipo,
+    etiquetaPeriodo: etiquetaPeriodo(ctx.mes, ctx.periodo).toLowerCase(),
     caja: d.caja,
     tieneDeuda: d.tieneDeuda,
     costesPendientes: d.costesPendientes,
     yieldPct: d.nt.yieldPct,
     margenPct: d.nt.margenPct,
+    rendimientoAnualizado: d.nt.anualizado,
+    mesesOperando: d.nt.mesesOperando,
     occBreakEven: d.occBreakEven,
     occTTM: ocupacionDe(rTTM),
     disponiblesTTM: rTTM.disponibles,
@@ -279,7 +365,14 @@ export async function generarAcciones(): Promise<CentroAcciones> {
     (s, u) => s + equityUnidad(u.costeAdquisicion, prestamoDeUnidad(u.displayName, u.nickname)),
     0,
   );
-  for (const it of lecturaCaja(totalTTM, equity, false)) {
+  const ritmo = ritmoCajaAlcance({
+    alcance: ctx.unidades,
+    unidades: ctx.unidades,
+    map: ctx.map,
+    mesesTTM: ctx.mesesTTM,
+    pesos: ctx.pesos,
+  });
+  for (const it of lecturaCaja(totalTTM, equity, false, ritmo)) {
     acciones.push({
       ...it,
       area: "caja",

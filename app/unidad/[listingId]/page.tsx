@@ -9,7 +9,7 @@ import ForwardMeses, { type MesForward } from "@/components/ForwardMeses";
 import Insights from "@/components/Insights";
 import { forwardKpis } from "@/lib/forward";
 import { generarInsightsForward } from "@/lib/forward-insights";
-import { sumarMeses } from "@/lib/time";
+import { mesActualMadrid, sumarMeses } from "@/lib/time";
 import PnLTable from "@/components/PnLTable";
 import ReservationsList from "@/components/ReservationsList";
 import CostBreakdown from "@/components/CostBreakdown";
@@ -28,6 +28,8 @@ import {
   mixCanales,
   estadoDatos,
   noiTTM,
+  pesosEstacionales,
+  compararInteranual,
   statsReservas,
   reservasDelMes,
   costesDetalle,
@@ -43,6 +45,7 @@ import {
   rangoFechas,
   etiquetaPeriodo,
   type Periodo,
+  type Rollup,
   type UnidadMes,
 } from "@/lib/metrics";
 
@@ -87,25 +90,41 @@ export default async function UnidadPage({
   const mesesTTM = ttm(mes);
   // Proximos 6 meses (relativos a hoy, no al mes seleccionado).
   const mesesForward = Array.from({ length: 6 }, (_, i) =>
-    sumarMeses(mesPorDefecto(), i + 1),
+    sumarMeses(mesActualMadrid(), i + 1),
   );
   const todos = Array.from(
     new Set([...periodMeses, ...priorMeses, ...mesesTTM, prevMes, ...mesesForward]),
   );
-  const map = await unidadMesMap([u], todos);
+  // Se cargan todas las unidades: los pesos estacionales para anualizar una
+  // unidad nueva salen de las que llevan el ano completo.
+  const map = await unidadMesMap(unidades, todos);
 
   const de = (meses: string[]): UnidadMes[] =>
     meses.map((m) => map.get(`${u.listingId}|${m}`)).filter((x): x is UnidadMes => !!x);
 
   const rAct = sumar(de(periodMeses));
   const rPrev = sumar(de([prevMes]));
-  const rPrior = sumar(de(priorMeses));
   const esMes = periodo === "mes";
+
+  // Interanual de una unidad: solo meses en que operaba los dos anos (si
+  // arranco a mitad del ano pasado, compararla con su rampa no dice nada).
+  const cmp = compararInteranual(map, [u], periodMeses);
+  const hayCmp = cmp.lfl.unidades > 0;
+  const parcial = hayCmp && (cmp.lflDistinto || cmp.meses.length < periodMeses.length);
+  const deltasYoY = (f: (r: Rollup) => number | null) => ({
+    deltaYoY: hayCmp ? delta(f(cmp.lfl.act), f(cmp.lfl.prior)) : null,
+    etiquetaYoY: parcial ? "vs año ant. (meses comparables)" : "vs año ant.",
+    tituloYoY: !hayCmp
+      ? "Sin año anterior comparable: la unidad no operaba entonces o queda fuera del histórico sincronizado."
+      : parcial
+        ? "Solo los meses en que la unidad operaba los dos años y con histórico sincronizado."
+        : "Mismo periodo del año anterior.",
+  });
   const occ = ocupacionDe(rAct);
   const adr = adrDe(rAct);
   const revpar = revparDe(rAct);
 
-  const nt = noiTTM(u, map, mesesTTM);
+  const nt = noiTTM(u, map, mesesTTM, pesosEstacionales(map, unidades, mesesTTM));
   const rendChip = semaforoRentabilidad(u.tipo, nt.yieldPct, nt.margenPct);
 
   const serie = seriePnL(map, [u], mesesTTM);
@@ -142,8 +161,8 @@ export default async function UnidadPage({
   });
 
   const etiqueta = etiquetaPeriodo(mes, periodo);
-  const margenNOI = rAct.brutos > 0 ? rAct.noi / rAct.brutos : null;
-  const margenPrior = rPrior.brutos > 0 ? rPrior.noi / rPrior.brutos : null;
+  const margenDe = (r: Rollup) => (r.brutos > 0 ? r.noi / r.brutos : null);
+  const margenNOI = margenDe(rAct);
   const baseLimp = rAct.alojamiento + rAct.limpieza;
   const comisionLimpieza = baseLimp > 0 ? (rAct.comisiones * rAct.limpieza) / baseLimp : 0;
 
@@ -158,13 +177,19 @@ export default async function UnidadPage({
         : "";
   const rendimiento =
     u.tipo === "propiedad" && nt.yieldPct !== null && rendChip ? (
-      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
-        <span className="text-xs font-medium text-muted">NOI yield 12 meses</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
+        <span className="text-xs font-medium text-muted">
+          {nt.anualizado ? "NOI yield anualizado" : "NOI yield 12 meses"}
+        </span>
         <Chip estado={rendChip}>{pctDirecto(nt.yieldPct)}</Chip>
-        <span className="text-xs text-faint">objetivo 9-11%</span>
+        <span className="text-xs text-faint">
+          {nt.anualizado
+            ? `${Math.round(nt.mesesOperando)} meses operando · objetivo 9-11%`
+            : "objetivo 9-11%"}
+        </span>
       </div>
     ) : u.tipo === "master_lease" && nt.margenPct !== null && rendChip ? (
-      <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-line bg-surface px-3 py-2 shadow-card">
         <span className="text-xs font-medium text-muted">Margen NOI 12 meses</span>
         <Chip estado={rendChip}>{pctDirecto(nt.margenPct)}</Chip>
       </div>
@@ -182,31 +207,31 @@ export default async function UnidadPage({
         <KpiCard label="Ocupación" value={pct(occ)}
           sub={`${num(rAct.vendidas)} de ${num(rAct.disponibles)} noches${rAct.bloqueadas > 0 ? ` · ${num(rAct.bloqueadas)} bloqueadas` : ""}`}
           deltaMoM={esMes ? delta(occ, ocupacionDe(rPrev)) : undefined}
-          deltaYoY={delta(occ, ocupacionDe(rPrior))} />
+          {...deltasYoY(ocupacionDe)} />
         <KpiCard label="ADR" value={eur(adr)}
           sub={stats.estanciaMedia ? `Estancia media ${stats.estanciaMedia.toFixed(1).replace(".", ",")} noches` : undefined}
           deltaMoM={esMes ? delta(adr, adrDe(rPrev)) : undefined}
-          deltaYoY={delta(adr, adrDe(rPrior))} />
+          {...deltasYoY(adrDe)} />
         <KpiCard label="RevPAR" value={eur(revpar)}
           sub={stats.leadTimeMedio ? `Ventana de reserva ${Math.round(stats.leadTimeMedio)} días` : undefined}
           deltaMoM={esMes ? delta(revpar, revparDe(rPrev)) : undefined}
-          deltaYoY={delta(revpar, revparDe(rPrior))} />
+          {...deltasYoY(revparDe)} />
         <KpiCard label="Ingresos netos" value={eur(rAct.netos)}
           sub={`Brutos ${eur(rAct.brutos)}`}
           deltaMoM={esMes ? delta(rAct.netos, rPrev.netos) : undefined}
-          deltaYoY={delta(rAct.netos, rPrior.netos)} />
+          {...deltasYoY((r) => r.netos)} />
         <KpiCard label="NOI" value={eur(rAct.noi)}
           sub={rAct.limpieza > 0 ? `Limpieza neta ${eur(limpiezaNeta)}` : undefined}
           deltaMoM={esMes ? delta(rAct.noi, rPrev.noi) : undefined}
-          deltaYoY={delta(rAct.noi, rPrior.noi)} />
+          {...deltasYoY((r) => r.noi)} />
         <KpiCard label="Margen NOI" value={pct(margenNOI)}
-          deltaMoM={esMes ? delta(margenNOI, rPrev.brutos > 0 ? rPrev.noi / rPrev.brutos : null) : undefined}
-          deltaYoY={delta(margenNOI, margenPrior)} />
+          deltaMoM={esMes ? delta(margenNOI, margenDe(rPrev)) : undefined}
+          {...deltasYoY(margenDe)} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader titulo="Ingresos y NOI" descripcion="Últimos 12 meses" />
+          <CardHeader titulo="Ingresos y NOI" descripcion="12 meses cerrados" />
           <NoiRevenueChart data={serieChart} />
         </Card>
         <Card>
@@ -241,7 +266,7 @@ export default async function UnidadPage({
       <Card>
         <CardHeader
           titulo="P&L mensual"
-          descripcion="Últimos 12 meses"
+          descripcion="12 meses cerrados"
           accion={
             <LinkFlecha href={`/pnl?mes=${mes}&periodo=ttm&unidad=${u.listingId}`}>
               Ver hasta caja
